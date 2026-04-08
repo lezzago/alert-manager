@@ -8,7 +8,6 @@
  */
 import { schema } from '@osd/config-schema';
 import { IRouter } from '../../../../src/core/server';
-import yaml from 'js-yaml';
 import {
   DatasourceService,
   MultiBackendAlertService,
@@ -52,6 +51,7 @@ import {
   handlePreviewSLORules,
   handleGetSLOStatuses,
 } from './slo_handlers';
+import { handleGetAlertmanagerConfig } from './alertmanager_handlers';
 
 export function defineRoutes(
   router: IRouter,
@@ -375,84 +375,12 @@ export function defineRoutes(
   router.get(
     { path: '/api/alerting/alertmanager/config', validate: false },
     async (_ctx, _req, res) => {
-      try {
-        const promBackend = alertService.getPrometheusBackend?.();
-        if (!promBackend?.getAlertmanagerStatus) {
-          return res.ok({ body: { available: false, error: 'Alertmanager not configured' } });
-        }
-        const status = await promBackend.getAlertmanagerStatus();
-        const rawYaml = status.config?.original || '';
-
-        // Parse the Alertmanager YAML config into structured data for the UI
-        let parsedConfig: Record<string, any> | undefined;
-        let configParseError: string | undefined;
-        if (rawYaml) {
-          try {
-            const parsed = yaml.load(rawYaml) as Record<string, any>;
-            if (parsed && typeof parsed === 'object') {
-              // Map receivers: extract integration types from receiver configs
-              const receivers = (parsed.receivers || []).map((r: any) => {
-                const integrations: Array<{ type: string; summary: string }> = [];
-                for (const [key, val] of Object.entries(r)) {
-                  if (key === 'name') continue;
-                  if (key.endsWith('_configs') && Array.isArray(val)) {
-                    const type = key.replace(/_configs$/, '');
-                    for (const cfg of val as any[]) {
-                      const summary =
-                        cfg.url ||
-                        cfg.channel ||
-                        cfg.to ||
-                        cfg.api_url ||
-                        cfg.service_key ||
-                        JSON.stringify(cfg).substring(0, 80);
-                      integrations.push({ type, summary: String(summary) });
-                    }
-                  }
-                }
-                if (integrations.length === 0)
-                  integrations.push({ type: 'none', summary: 'No integrations' });
-                return { name: r.name, integrations };
-              });
-
-              // Map inhibit_rules
-              const inhibitRules = (parsed.inhibit_rules || []).map((r: any) => ({
-                source_matchers: r.source_matchers,
-                target_matchers: r.target_matchers,
-                source_match: r.source_match,
-                target_match: r.target_match,
-                equal: r.equal,
-              }));
-
-              parsedConfig = {
-                global: parsed.global,
-                route: parsed.route,
-                receivers,
-                inhibitRules,
-              };
-            }
-          } catch (yamlErr: any) {
-            configParseError = `Failed to parse YAML: ${yamlErr.message}`;
-          }
-        }
-
-        return res.ok({
-          body: {
-            available: true,
-            cluster: {
-              status: (status.cluster as any)?.status || 'unknown',
-              peers: (status.cluster as any)?.peers || [],
-              peerCount: ((status.cluster as any)?.peers || []).length,
-            },
-            uptime: (status as any).uptime,
-            versionInfo: (status as any).versionInfo || {},
-            config: parsedConfig,
-            configParseError,
-            raw: rawYaml,
-          },
-        });
-      } catch (e: any) {
-        return res.ok({ body: { available: false, error: e.message } });
+      const promBackend = alertService.getPrometheusBackend?.();
+      if (!promBackend) {
+        return res.ok({ body: { available: false, error: 'Alertmanager not configured' } });
       }
+      const result = await handleGetAlertmanagerConfig(promBackend);
+      return res.ok({ body: result.body });
     }
   );
 

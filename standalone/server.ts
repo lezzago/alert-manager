@@ -9,7 +9,6 @@
  */
 import express from 'express';
 import path from 'path';
-import yaml from 'js-yaml';
 import {
   InMemoryDatasourceService,
   MultiBackendAlertService,
@@ -41,6 +40,7 @@ import {
   handleGetUnifiedRules,
   handleGetRuleDetail,
   handleGetAlertDetail,
+  handleListWorkspaces,
 } from '../server/routes/handlers';
 import {
   handleCreateMonitor,
@@ -64,6 +64,16 @@ import {
   handlePreviewSLORules,
   handleGetSLOStatuses,
 } from '../server/routes/slo_handlers';
+import {
+  handleGetAlertmanagerAlerts,
+  handleGetAlertmanagerSilences,
+  handleCreateAlertmanagerSilence,
+  handleDeleteAlertmanagerSilence,
+  handleGetAlertmanagerStatus,
+  handleGetAlertmanagerReceivers,
+  handleGetAlertmanagerAlertGroups,
+  handleGetAlertmanagerConfig,
+} from '../server/routes/alertmanager_handlers';
 import { SloService } from '../core/slo_service';
 
 const PORT = process.env.PORT || 5603;
@@ -290,173 +300,37 @@ app.get('/api/datasources/:dsId/prom-alerts', async (req, res) => {
 // ============================================================================
 
 app.get('/api/alertmanager/alerts', async (_req, res) => {
-  try {
-    if (!promBackend.getAlertmanagerAlerts) {
-      return res.status(501).json({ error: 'Alertmanager not configured' });
-    }
-    const alerts = await promBackend.getAlertmanagerAlerts();
-    res.json({ alerts });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleGetAlertmanagerAlerts(promBackend);
+  res.status(r.status).json(r.body);
 });
-
 app.get('/api/alertmanager/silences', async (_req, res) => {
-  try {
-    if (!promBackend.getSilences) {
-      return res.status(501).json({ error: 'Alertmanager not configured' });
-    }
-    const silences = await promBackend.getSilences();
-    res.json({ silences });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleGetAlertmanagerSilences(promBackend);
+  res.status(r.status).json(r.body);
 });
-
 app.post('/api/alertmanager/silences', async (req, res) => {
-  try {
-    if (!promBackend.createSilence) {
-      return res.status(501).json({ error: 'Alertmanager not configured' });
-    }
-    const silenceId = await promBackend.createSilence(req.body);
-    res.json({ silenceID: silenceId });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleCreateAlertmanagerSilence(promBackend, req.body);
+  res.status(r.status).json(r.body);
 });
-
 app.delete('/api/alertmanager/silences/:id', async (req, res) => {
-  try {
-    if (!promBackend.deleteSilence) {
-      return res.status(501).json({ error: 'Alertmanager not configured' });
-    }
-    const ok = await promBackend.deleteSilence(req.params.id);
-    res.json({ success: ok });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleDeleteAlertmanagerSilence(promBackend, req.params.id);
+  res.status(r.status).json(r.body);
 });
-
 app.get('/api/alertmanager/status', async (_req, res) => {
-  try {
-    if (!promBackend.getAlertmanagerStatus) {
-      return res.status(501).json({ error: 'Alertmanager not configured' });
-    }
-    const status = await promBackend.getAlertmanagerStatus();
-    res.json(status);
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleGetAlertmanagerStatus(promBackend);
+  res.status(r.status).json(r.body);
 });
-
 app.get('/api/alertmanager/receivers', async (_req, res) => {
-  try {
-    if (!promBackend.getAlertmanagerReceivers) {
-      return res.status(501).json({ error: 'Alertmanager receivers not available' });
-    }
-    const receivers = await promBackend.getAlertmanagerReceivers();
-    res.json({ receivers });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleGetAlertmanagerReceivers(promBackend);
+  res.status(r.status).json(r.body);
 });
-
 app.get('/api/alertmanager/alert-groups', async (_req, res) => {
-  try {
-    if (!promBackend.getAlertmanagerAlertGroups) {
-      return res.status(501).json({ error: 'Alertmanager alert groups not available' });
-    }
-    const groups = await promBackend.getAlertmanagerAlertGroups();
-    res.json({ groups });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleGetAlertmanagerAlertGroups(promBackend);
+  res.status(r.status).json(r.body);
 });
-
-// Parsed Alertmanager configuration (route tree, receivers, inhibit rules).
-// Fetches status via OpenSearch Direct Query proxy, parses YAML server-side.
 app.get('/api/alertmanager/config', async (_req, res) => {
-  try {
-    if (!promBackend.getAlertmanagerStatus) {
-      return res.json({ available: false, error: 'Alertmanager not configured' });
-    }
-    const status = await promBackend.getAlertmanagerStatus();
-
-    let parsedConfig: any = {};
-    try {
-      parsedConfig = yaml.load(status.config?.original || '') || {};
-    } catch (yamlErr: any) {
-      return res.json({
-        available: true,
-        configParseError: yamlErr.message,
-        raw: status.config?.original || '',
-        cluster: status.cluster,
-        uptime: status.uptime,
-        versionInfo: status.versionInfo,
-      });
-    }
-
-    const receivers = (parsedConfig.receivers || []).map((r: any) => ({
-      name: r.name,
-      integrations: extractReceiverIntegrations(r),
-    }));
-
-    res.json({
-      available: true,
-      cluster: {
-        status: status.cluster?.status || 'unknown',
-        peers: status.cluster?.peers || [],
-        peerCount: (status.cluster?.peers || []).length,
-      },
-      uptime: status.uptime,
-      versionInfo: status.versionInfo || {},
-      config: {
-        global: parsedConfig.global || {},
-        route: parsedConfig.route || null,
-        receivers,
-        inhibitRules: parsedConfig.inhibit_rules || [],
-      },
-    });
-  } catch (e: any) {
-    res.json({ available: false, error: e.message });
-  }
+  const r = await handleGetAlertmanagerConfig(promBackend);
+  res.status(r.status).json(r.body);
 });
-
-function extractReceiverIntegrations(receiver: any): Array<{ type: string; summary: string }> {
-  const integrations: Array<{ type: string; summary: string }> = [];
-  const configKeys = [
-    'webhook_configs',
-    'slack_configs',
-    'email_configs',
-    'pagerduty_configs',
-    'opsgenie_configs',
-    'victorops_configs',
-    'pushover_configs',
-    'wechat_configs',
-    'sns_configs',
-    'telegram_configs',
-    'msteams_configs',
-    'webex_configs',
-  ];
-  for (const key of configKeys) {
-    if (receiver[key] && Array.isArray(receiver[key])) {
-      for (const cfg of receiver[key]) {
-        const typeName = key.replace('_configs', '');
-        let summary = '';
-        if (typeName === 'webhook') summary = cfg.url || cfg.url_file || 'webhook';
-        else if (typeName === 'slack') summary = cfg.channel || 'slack';
-        else if (typeName === 'email') summary = cfg.to || 'email';
-        else if (typeName === 'pagerduty') summary = 'pagerduty';
-        else summary = typeName;
-        integrations.push({ type: typeName, summary });
-      }
-    }
-  }
-  if (integrations.length === 0) {
-    integrations.push({ type: 'none', summary: 'No integrations' });
-  }
-  return integrations;
-}
 
 // ============================================================================
 // Unified Views (cross-backend, for the UI)
@@ -504,12 +378,8 @@ app.get('/api/paginated/alerts', async (req, res) => {
 // ============================================================================
 
 app.get('/api/datasources/:dsId/workspaces', async (req, res) => {
-  try {
-    const workspaces = await datasourceService.listWorkspaces(req.params.dsId);
-    res.json({ workspaces });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+  const r = await handleListWorkspaces(datasourceService, req.params.dsId);
+  res.status(r.status).json(r.body);
 });
 
 // ============================================================================

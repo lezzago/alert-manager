@@ -241,6 +241,22 @@ export async function handleGetUnifiedRules(
 }
 
 // ============================================================================
+// Workspace Discovery
+// ============================================================================
+
+export async function handleListWorkspaces(
+  datasourceService: DatasourceService,
+  dsId: string
+): Promise<Result> {
+  try {
+    const workspaces = await datasourceService.listWorkspaces(dsId);
+    return { status: 200, body: { workspaces } };
+  } catch (e) {
+    return { status: 500, body: { error: safeError(e) } };
+  }
+}
+
+// ============================================================================
 // Detail View Handlers (on-demand, loaded when user opens flyout)
 // ============================================================================
 

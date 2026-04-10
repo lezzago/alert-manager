@@ -58,7 +58,10 @@ import {
   handleGetMetricMetadata,
 } from './metadata_handlers';
 import type { PrometheusMetadataService } from '../../common/prometheus_metadata_service';
+import type { OtelServiceDiscoveryService } from '../../common/otel_service_discovery';
+import type { ApmConfigReader, SavedObjectsRepository } from '../../common/apm_config_reader';
 import { handleGetAlertmanagerConfig } from './alertmanager_handlers';
+import { handleListServices, handleGetService, handleGetApmConfig } from './service_handlers';
 
 export function defineRoutes(
   router: IRouter,
@@ -67,7 +70,10 @@ export function defineRoutes(
   sloService?: SloService,
   suppressionService?: SuppressionRuleService,
   logger?: Logger,
-  metadataService?: PrometheusMetadataService
+  metadataService?: PrometheusMetadataService,
+  otelService?: OtelServiceDiscoveryService,
+  apmConfigReader?: ApmConfigReader,
+  getApmRepository?: () => SavedObjectsRepository | undefined
 ) {
   // Datasource routes
   router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
@@ -764,5 +770,40 @@ export function defineRoutes(
         });
       }
     );
+  }
+
+  // --------------------------------------------------------------------------
+  // OTEL Service Discovery routes (optional — only when provider is available)
+  // --------------------------------------------------------------------------
+
+  if (otelService) {
+    router.get({ path: '/api/alerting/services', validate: false }, async (_ctx, _req, res) => {
+      const result = await handleListServices(otelService, logger);
+      return res.ok({ body: result.body });
+    });
+
+    router.get(
+      {
+        path: '/api/alerting/services/{name}',
+        validate: { params: schema.object({ name: schema.string() }) },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleGetService(otelService, req.params.name, logger);
+        if (result.status === 200) return res.ok({ body: result.body });
+        return res.notFound({
+          body: {
+            message: String((result.body as Record<string, unknown>)?.error || 'Service not found'),
+          },
+        });
+      }
+    );
+  }
+
+  if (apmConfigReader) {
+    router.get({ path: '/api/alerting/apm-config', validate: false }, async (_ctx, _req, res) => {
+      const repository = getApmRepository?.();
+      const result = await handleGetApmConfig(apmConfigReader, repository, logger);
+      return res.ok({ body: result.body });
+    });
   }
 }

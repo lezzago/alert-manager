@@ -22,10 +22,15 @@ import {
   SuppressionRuleService,
   Logger as AlarmsLogger,
   PrometheusMetadataProvider,
+  OtelServiceDiscoveryService,
+  ApmConfigReader,
+  OpenSearchOtelProvider,
 } from '../common';
-import { MockOpenSearchBackend, MockPrometheusBackend } from '../common/testing';
+import { MockOpenSearchBackend, MockPrometheusBackend, MockOtelProvider } from '../common/testing';
 import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
 import { SavedObjectSloStore } from './slo_saved_object_store';
+import { HttpClient } from '../common/http_client';
+import type { SavedObjectsRepository } from '../common/apm_config_reader';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import yaml from 'js-yaml';
@@ -83,6 +88,7 @@ function readOsdConfigCredentials(
 export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart> {
   private readonly logger: Logger;
   private sloService?: SloService;
+  private apmRepository?: SavedObjectsRepository;
 
   constructor(initializerContext: PluginInitializerContext) {
     this.logger = initializerContext.logger.get();
@@ -141,6 +147,10 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
     const sloService = new SloService(logger, mockMode);
     this.sloService = sloService;
 
+    // Resolve OpenSearch URL/auth early — needed by both backend registration and OTEL provider
+    let osUrl: string | undefined;
+    let osAuth: { username: string; password: string } | undefined;
+
     if (mockMode) {
       this.logger.info('alertManager: Running in MOCK mode');
       const osBackend = new MockOpenSearchBackend(logger);
@@ -180,9 +190,6 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       //  3. Fallback to admin/admin
       const envUser = process.env.OPENSEARCH_USER;
       const envPass = process.env.OPENSEARCH_PASSWORD;
-
-      let osUrl: string;
-      let osAuth: { username: string; password: string };
 
       if (envUser && envPass) {
         osUrl = process.env.OPENSEARCH_URL || 'https://localhost:9200';
@@ -268,6 +275,43 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       this.logger.info('alertManager: PrometheusMetadataService initialized');
     }
 
+    // Create OTEL service discovery — uses mock or live provider depending on mode.
+    // In mock mode, MockOtelProvider returns services matching existing mock data.
+    // In live mode, OpenSearchOtelProvider queries the otel-v1-apm-service-map* index.
+    let otelService: OtelServiceDiscoveryService | undefined;
+    const apmConfigReader = new ApmConfigReader(logger);
+    try {
+      if (mockMode) {
+        const otelProvider = new MockOtelProvider();
+        otelService = new OtelServiceDiscoveryService(
+          otelProvider,
+          sloService,
+          alertService,
+          logger
+        );
+      } else if (osUrl && osAuth) {
+        const httpClient = new HttpClient(logger);
+        const otelProvider = new OpenSearchOtelProvider(httpClient, osUrl, osAuth, false, logger);
+        otelService = new OtelServiceDiscoveryService(
+          otelProvider,
+          sloService,
+          alertService,
+          logger
+        );
+      }
+      if (otelService) {
+        this.logger.info(
+          `alertManager: OtelServiceDiscoveryService initialized (${mockMode ? 'mock' : 'live'})`
+        );
+      }
+    } catch (err: unknown) {
+      this.logger.warn(
+        `alertManager: Failed to initialize OtelServiceDiscoveryService: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+
     defineRoutes(
       router,
       datasourceService,
@@ -275,7 +319,10 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       sloService,
       suppressionService,
       logger,
-      metadataService
+      metadataService,
+      otelService,
+      apmConfigReader,
+      () => this.apmRepository
     );
 
     return {};
@@ -283,6 +330,22 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
 
   public start(core: CoreStart) {
     this.logger.debug('alertManager: Started');
+
+    // Create APM config repository for reading observability plugin's dataset config.
+    // Uses 'correlations' type which stores APM-Config-* saved objects.
+    try {
+      this.apmRepository = core.savedObjects.createInternalRepository([
+        'slo-definition',
+        'correlations',
+      ]) as unknown as SavedObjectsRepository;
+      this.logger.debug('alertManager: APM config repository created');
+    } catch (err: unknown) {
+      this.logger.debug(
+        `alertManager: Could not create APM config repository (observability plugin may not be installed): ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
 
     // Upgrade SLO storage to saved objects for persistence across restarts.
     // Gracefully falls back to the InMemorySloStore if this fails.

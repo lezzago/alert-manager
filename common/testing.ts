@@ -8,7 +8,7 @@
  * Import from 'common/testing' instead of 'common' to make the dev-only
  * dependency explicit.
  */
-export { MockOpenSearchBackend, MockPrometheusBackend } from './mock_backend';
+export { MockOpenSearchBackend, MockPrometheusBackend, MockOtelProvider } from './mock_backend';
 export {
   generateMockAlertHistory,
   generateMockNotificationRouting,

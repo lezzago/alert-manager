@@ -21,6 +21,9 @@ import {
   PromAlert,
   PromAlertingRule,
   PromRuleGroup,
+  OtelService,
+  OtelSignals,
+  OtelServiceDiscoveryProvider,
 } from './types';
 import { MOCK_METRICS, MOCK_LABEL_NAMES, MOCK_LABEL_VALUES } from './mock_data';
 
@@ -1337,6 +1340,95 @@ export class MockPrometheusBackend implements PrometheusBackend, PrometheusMetad
 // ============================================================================
 // Helpers
 // ============================================================================
+
+// ============================================================================
+// Mock OTEL Service Discovery Provider
+// ============================================================================
+
+/**
+ * Mock provider returning services that align with existing mock SLO/alert data.
+ * Service names match those seeded in SloService.seed() and MockPrometheusBackend.
+ */
+export class MockOtelProvider implements OtelServiceDiscoveryProvider {
+  private static readonly MOCK_SERVICES: OtelService[] = [
+    {
+      name: 'api-gateway',
+      environment: 'production',
+      type: 'Service',
+      sdkLanguage: 'java',
+      dependencies: ['payment-service', 'order-service', 'user-auth'],
+      lastSeen: new Date().toISOString(),
+    },
+    {
+      name: 'payment-service',
+      environment: 'production',
+      type: 'Service',
+      sdkLanguage: 'go',
+      dependencies: ['postgres', 'notification-service'],
+      lastSeen: new Date().toISOString(),
+    },
+    {
+      name: 'order-service',
+      environment: 'production',
+      type: 'Service',
+      sdkLanguage: 'java',
+      dependencies: ['postgres', 'payment-service'],
+      lastSeen: new Date().toISOString(),
+    },
+    {
+      name: 'pet-clinic-frontend',
+      environment: 'production',
+      type: 'Service',
+      sdkLanguage: 'nodejs',
+      dependencies: ['api-gateway'],
+      lastSeen: new Date().toISOString(),
+    },
+    {
+      name: 'checkout-service',
+      environment: 'production',
+      type: 'Service',
+      sdkLanguage: 'python',
+      dependencies: ['payment-service', 'order-service'],
+      lastSeen: new Date().toISOString(),
+    },
+    {
+      name: 'notification-service',
+      environment: 'production',
+      type: 'Service',
+      sdkLanguage: 'nodejs',
+      dependencies: [],
+      lastSeen: new Date().toISOString(),
+    },
+    {
+      name: 'user-auth',
+      environment: 'production',
+      type: 'Service',
+      sdkLanguage: 'go',
+      dependencies: ['postgres'],
+      lastSeen: new Date().toISOString(),
+    },
+    {
+      name: 'postgres',
+      environment: 'production',
+      type: 'Database',
+      sdkLanguage: undefined,
+      dependencies: [],
+      lastSeen: new Date().toISOString(),
+    },
+  ];
+
+  async discoverServices(_timeRangeMinutes?: number): Promise<OtelService[]> {
+    return MockOtelProvider.MOCK_SERVICES;
+  }
+
+  async getAvailableSignals(serviceName: string): Promise<OtelSignals> {
+    // Database nodes typically only have metrics
+    if (serviceName === 'postgres') {
+      return { hasTraces: false, hasLogs: true, hasMetrics: true };
+    }
+    return { hasTraces: true, hasLogs: true, hasMetrics: true };
+  }
+}
 
 /** Infer Prometheus metric type from name suffix heuristics. */
 function inferMetricType(name: string): PrometheusMetricMetadata['type'] {

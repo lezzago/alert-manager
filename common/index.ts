@@ -44,6 +44,10 @@ export {
 export { validateSloForm, validateSloFormFull, isSloFormValid } from './slo_validators';
 export type { SloValidationResult } from './slo_validators';
 
+export { OtelServiceDiscoveryService } from './otel_service_discovery';
+export { ApmConfigReader } from './apm_config_reader';
+export { OpenSearchOtelProvider } from './opensearch_otel_provider';
+
 export type { AlertManagerError, NotFoundError, ValidationError, InternalError } from './errors';
 export {
   createNotFoundError,

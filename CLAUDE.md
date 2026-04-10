@@ -47,7 +47,7 @@ Claude should invoke agents proactively for these situations **without being ask
 "Have Jay evaluate the SLO templates against industry best practices"
 
 # Build-deploy-verify
-"Have Rio build and deploy, then Kai validate all 5 tabs"
+"Have Rio build and deploy, then Kai validate all 6 tabs"
 
 # Full review loop (before PR)
 "Run 5 rounds of Chen + Sanjay review on all changed files. Fix issues between rounds."
@@ -119,6 +119,14 @@ yarn start --config config/opensearch_dashboards.dev.yml
 - `InMemorySloStore` (standalone default)
 - `SavedObjectSloStore` (OSD plugin, persists to OpenSearch)
 
+**OTEL service discovery**: `OtelServiceDiscoveryProvider` interface (`common/types.ts`) for discovering OTEL-instrumented services:
+- Implemented by `OpenSearchOtelProvider` (queries `otel-v1-apm-service-map*` index) and `MockOtelProvider` (MOCK_MODE)
+- Wrapped by `OtelServiceDiscoveryService` (`common/otel_service_discovery.ts`) with stale-while-revalidate caching (2-min services, 5-min signals)
+- Enriches services with SLO coverage and active alert counts from existing data
+- `ApmConfigReader` (`common/apm_config_reader.ts`) reads APM dataset config from `correlations` saved objects
+- 3 API routes: list services, get service, get APM config
+- Frontend: `ServicesTab` component with stat cards, searchable table, detail flyout
+
 **Prometheus metadata**: `PrometheusMetadataProvider` interface (`common/types.ts`) for metric/label discovery:
 - Implemented by `DirectQueryPrometheusBackend` (live) and `MockBackend` (MOCK_MODE)
 - Wrapped by `PrometheusMetadataService` (`common/prometheus_metadata_service.ts`) with stale-while-revalidate caching
@@ -149,6 +157,12 @@ yarn start --config config/opensearch_dashboards.dev.yml
 | **SLO Handlers** | `server/routes/slo_handlers.ts` | Framework-agnostic SLO request handlers |
 | **Metadata Handlers** | `server/routes/metadata_handlers.ts` | Framework-agnostic Prometheus metadata handlers |
 | **API Client** | `public/services/alarms_client.ts` | Mode-aware HTTP client with SLO + metadata methods |
+| **OTEL Discovery** | `common/otel_service_discovery.ts` | Service discovery caching + SLO/alert enrichment |
+| **OTEL Provider** | `common/opensearch_otel_provider.ts` | Live DSL queries against `otel-v1-apm-service-map*` |
+| **APM Config** | `common/apm_config_reader.ts` | Reads APM dataset config from observability plugin saved objects |
+| **Service Handlers** | `server/routes/service_handlers.ts` | Framework-agnostic handlers for service discovery routes |
+| **Services Tab** | `public/components/services_tab.tsx` | OTEL services table with stat cards and search |
+| **Service Flyout** | `public/components/service_detail_flyout.tsx` | Service detail view with dependencies and signals |
 | **Metadata Hook** | `public/hooks/use_prometheus_metadata.ts` | React hook: debounced fetch, cascading, graceful degradation |
 | **SLI Section** | `public/components/sli_section.tsx` | Extracted SLI form with `useReducer`, autocomplete |
 | **SLO Wizard** | `public/components/create_slo_wizard.tsx` | Multi-step SLO creation orchestrator |
@@ -163,13 +177,13 @@ Two projects in `jest.config.js`:
 - `server` -- Node environment, tests in `common/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
-Current: **32 test files, 913 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
+Current: **35 test files, 935 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
 
 OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new OUI components to production code, check if a mock exists -- components needing interaction in tests (click handlers, selectable props, role attributes) require explicit mocks.
 
 ### E2E Tests (Cypress)
 
-8 spec files in `cypress/e2e/` with **71 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2). Two modes:
+9 spec files in `cypress/e2e/` with **81 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 10). Two modes:
 
 **Standalone mode** (default, fast, no Docker needed):
 ```bash

@@ -704,6 +704,57 @@ export interface PrometheusMetadataProvider {
 }
 
 // ============================================================================
+// OTEL Service Discovery
+// ============================================================================
+
+/** Discovered OTEL service from the service map index. */
+export interface OtelService {
+  name: string;
+  environment: string;
+  type?: string;
+  sdkLanguage?: string;
+  dependencies: string[];
+  lastSeen: string;
+}
+
+/** Available telemetry signals for a service. */
+export interface OtelSignals {
+  hasTraces: boolean;
+  hasLogs: boolean;
+  hasMetrics: boolean;
+}
+
+/** Service enriched with Alert Manager context (SLO coverage, alert status). */
+export interface EnrichedOtelService extends OtelService {
+  sloCount: number;
+  activeAlertCount: number;
+  worstErrorBudget?: number;
+  signals: OtelSignals;
+}
+
+/** APM dataset configuration read from observability plugin saved objects. */
+export interface ApmDatasetConfig {
+  tracesDataset?: { id: string; title: string };
+  serviceMapDataset?: { id: string; title: string };
+  prometheusDataSource?: { id: string; name: string };
+  logDatasets?: Array<{ id: string; title: string }>;
+  windowDuration: number;
+}
+
+/** Provider interface for OTEL service discovery (mirrors PrometheusMetadataProvider). */
+export interface OtelServiceDiscoveryProvider {
+  discoverServices(timeRangeMinutes?: number): Promise<OtelService[]>;
+  getAvailableSignals(serviceName: string): Promise<OtelSignals>;
+}
+
+/** Runtime check for OtelServiceDiscoveryProvider interface. */
+export function isOtelProvider(obj: unknown): obj is OtelServiceDiscoveryProvider {
+  if (!obj || typeof obj !== 'object') return false;
+  const c = obj as Record<string, unknown>;
+  return typeof c.discoverServices === 'function' && typeof c.getAvailableSignals === 'function';
+}
+
+// ============================================================================
 // Logger
 // ============================================================================
 

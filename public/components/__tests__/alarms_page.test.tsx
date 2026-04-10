@@ -261,7 +261,7 @@ describe('AlarmsPage', () => {
       expect(screen.getByText('Alert Manager')).toBeDefined();
       // Tabs structure should be present
       const tabs = document.querySelectorAll('[role="tab"]');
-      expect(tabs.length).toBe(5);
+      expect(tabs.length).toBe(6);
     });
   });
 

@@ -22,6 +22,8 @@ import type {
   UnifiedAlert,
   UnifiedRule,
   OSMonitor,
+  EnrichedOtelService,
+  ApmDatasetConfig,
 } from '../../common/types';
 import type { SloDefinition, SloInput, SloSummary } from '../../common/slo_types';
 
@@ -141,6 +143,9 @@ interface ApiPaths {
   labelNames: (dsId: string) => string;
   labelValues: (dsId: string, label: string) => string;
   metricMetadata: (dsId: string) => string;
+  services: string;
+  serviceDetail: (name: string) => string;
+  apmConfig: string;
 }
 
 const OSD_PATHS: ApiPaths = {
@@ -165,6 +170,9 @@ const OSD_PATHS: ApiPaths = {
     )}/metadata/label-values/${encodeURIComponent(label)}`,
   metricMetadata: (dsId) =>
     `/api/alerting/prometheus/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
+  services: '/api/alerting/services',
+  serviceDetail: (name) => `/api/alerting/services/${encodeURIComponent(name)}`,
+  apmConfig: '/api/alerting/apm-config',
 };
 
 const STANDALONE_PATHS: ApiPaths = {
@@ -188,6 +196,9 @@ const STANDALONE_PATHS: ApiPaths = {
       label
     )}`,
   metricMetadata: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
+  services: '/api/services',
+  serviceDetail: (name) => `/api/services/${encodeURIComponent(name)}`,
+  apmConfig: '/api/apm-config',
 };
 
 // ---------------------------------------------------------------------------
@@ -421,6 +432,28 @@ export class AlarmsApiClient {
 
   async getRuleDetail(dsId: string, ruleId: string): Promise<UnifiedRule> {
     return this.http.get<UnifiedRule>(this.paths.ruleDetail(dsId, ruleId));
+  }
+
+  // ---- OTEL Services -------------------------------------------------------
+
+  async listServices(): Promise<{ services: EnrichedOtelService[]; total: number }> {
+    return this.cachedGet(this.paths.services);
+  }
+
+  async getService(name: string): Promise<EnrichedOtelService | null> {
+    try {
+      return await this.http.get<EnrichedOtelService>(this.paths.serviceDetail(name));
+    } catch {
+      return null;
+    }
+  }
+
+  async getApmConfig(): Promise<(ApmDatasetConfig & { configured: boolean }) | null> {
+    try {
+      return await this.cachedGet(this.paths.apmConfig);
+    } catch {
+      return null;
+    }
   }
 
   // ---- Cache management ---------------------------------------------------

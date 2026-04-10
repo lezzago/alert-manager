@@ -30,6 +30,7 @@ import { SuppressionRulesPanel } from './suppression_rules_panel';
 import { CreateLogsMonitor, LogsMonitorFormState } from './create_logs_monitor';
 import { CreateMetricsMonitor, MetricsMonitorFormState } from './create_metrics_monitor';
 import SloListing from './slo_listing';
+import { ServicesTab } from './services_tab';
 import { AlarmsApiClient, HttpClient } from '../services/alarms_client';
 
 // Re-export for components that import from this file
@@ -43,7 +44,7 @@ interface AlarmsPageProps {
   apiClient: AlarmsApiClient;
 }
 
-type TabId = 'alerts' | 'rules' | 'routing' | 'suppression' | 'slos';
+type TabId = 'alerts' | 'rules' | 'routing' | 'suppression' | 'slos' | 'services';
 
 // Fetch a large page from the server so child tables can paginate client-side.
 // The child components (AlertsDashboard, MonitorsTable) handle their own
@@ -770,6 +771,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     { id: 'routing' as TabId, name: 'Routing' },
     { id: 'suppression' as TabId, name: 'Suppression' },
     { id: 'slos' as TabId, name: 'SLOs' },
+    { id: 'services' as TabId, name: 'Services' },
   ];
 
   const renderTable = () => {
@@ -826,6 +828,9 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
     }
     if (activeTab === 'slos') {
       return <SloListing apiClient={apiClient} />;
+    }
+    if (activeTab === 'services') {
+      return <ServicesTab apiClient={apiClient} />;
     }
     return null;
   };

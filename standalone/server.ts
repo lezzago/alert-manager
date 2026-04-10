@@ -82,7 +82,10 @@ import {
 } from '../server/routes/alertmanager_handlers';
 import { SloService } from '../common/slo_service';
 import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
+import { OtelServiceDiscoveryService } from '../common/otel_service_discovery';
+import { handleListServices, handleGetService } from '../server/routes/service_handlers';
 import type { PrometheusMetadataProvider } from '../common/types';
+import { MockOtelProvider } from '../common/testing';
 
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE === 'true';
@@ -211,6 +214,11 @@ async function initBackends(): Promise<void> {
     metadataService = new PrometheusMetadataService(metadataProvider, datasourceService, logger);
     logger.info('PrometheusMetadataService initialized');
   }
+
+  // Initialize OTEL service discovery (mock provider in standalone mode)
+  const otelProvider = new MockOtelProvider();
+  otelService = new OtelServiceDiscoveryService(otelProvider, sloService, alertService, logger);
+  logger.info('OtelServiceDiscoveryService initialized (mock provider)');
 }
 
 // Suppression service
@@ -222,6 +230,7 @@ const sloService = new SloService(logger, MOCK_MODE);
 // Metadata service — initialized in initBackends() once the backend is known.
 // Declared here so routes can reference it; populated before server starts.
 let metadataService: PrometheusMetadataService | undefined;
+let otelService: OtelServiceDiscoveryService | undefined;
 
 const app = express();
 app.use(express.json());
@@ -363,6 +372,31 @@ app.get('/api/datasources/:dsId/metadata/metric-metadata', async (req, res) => {
   }
   const r = await handleGetMetricMetadata(metadataService, req.params.dsId, logger);
   res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// OTEL Service Discovery Routes
+// ============================================================================
+
+app.get('/api/services', async (_req, res) => {
+  if (!otelService) {
+    return res.json({ services: [], total: 0 });
+  }
+  const r = await handleListServices(otelService, logger);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/services/:name', async (req, res) => {
+  if (!otelService) {
+    return res.status(404).json({ error: 'Service discovery not available' });
+  }
+  const r = await handleGetService(otelService, req.params.name, logger);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/apm-config', async (_req, res) => {
+  // Standalone has no APM config saved objects
+  res.json({ configured: false });
 });
 
 // ============================================================================

@@ -10,7 +10,7 @@ Transform the Alert Manager from an isolated alerting tool into an integrated ob
 |-------|--------|-------------|
 | **Phase 1** | **Done** | OTEL service discovery, APM config reading, Services tab |
 | **Phase 2** | **Done** | SLO suggestion engine based on discovered metrics |
-| **Phase 3** | Not started | Cross-signal correlation (traces + logs on alerts) |
+| **Phase 3** | **Done** | Cross-signal correlation (traces + logs on alerts) |
 | **Phase 4** | Not started | Bidirectional deep links (Alert Manager <-> APM) |
 | **Phase 5** | Not started | Service health dashboard with topology map |
 | **Phase 6** | Not started | Intelligent root cause suggestion engine |
@@ -53,38 +53,42 @@ Transform the Alert Manager from an isolated alerting tool into an integrated ob
 
 ---
 
-## Phase 3: Cross-Signal Correlation on Alerts
+## Phase 3: Cross-Signal Correlation on Alerts (DONE)
 
 **Goal**: Show correlated traces and logs from OTEL datasets when viewing an alert or SLO breach.
 
+**What was built:**
+- `AlertCorrelationProvider` interface + `isCorrelationProvider()` type guard in `common/types.ts`
+- `OpenSearchCorrelationProvider` — queries `ss4o_traces-*-*` and `ss4o_logs-*-*` via DSL
+- `AlertCorrelationService` — orchestrates cross-signal correlation with caching (2-min TTL)
+- Time window intelligence: +/- 5 min expansion, 3-window sampling for long-running alerts (>30 min)
+- Failure mode analysis: groups error traces by attributes to surface dominant failure patterns
+- `MockCorrelationProvider` — realistic mock data for 3 services with per-service error patterns
+- Correlation route handlers + API client methods (POST `/api/alerting/correlations`)
+- `AlertCorrelationPanel` React component with Traces/Logs/Metrics sub-tabs
+- Integrated into alert detail flyout as "Cross-Signal Correlations" accordion (conditionally shown when alert has `service` label)
+- Failure modes summary panel showing "78% of errors were connection_refused to payment-db"
+- Sampling notice for long-running alerts
+- 45 new unit tests (service + provider + handlers + UI component) + 8 Cypress E2E tests
+
 ### 3.1 — Alert Correlation Panel
 
-Add "Correlations" tab to alert detail page with sub-tabs:
+"Correlations" accordion in alert detail flyout with sub-tabs:
 
-**Traces**: Query `ss4o_traces-*-*` for spans matching alert's service + time window:
-```ppl
-source=ss4o_traces-*-* | where serviceName = '{service}' | where status.code = 2 | sort - startTime
-```
-
-**Logs**: Query correlated log datasets from APM config:
-```ppl
-source=ss4o_logs-*-* | where serviceName = '{service}' | where severity.text IN ('ERROR','FATAL')
-```
-
-**Metrics**: Show the alerting metric + related service metrics (throughput, error rate, latency).
+**Traces**: Query `ss4o_traces-*-*` for error spans (status.code=2) matching alert's service + time window
+**Logs**: Query `ss4o_logs-*-*` for ERROR/FATAL entries matching service + time window
+**Metrics**: Show correlated metric data points (extensible via Prometheus queryRange)
 
 ### 3.2 — Time Window Intelligence
 
-- Expand search window by +/- 5 minutes from alert active period (matches APM's telemetry lag compensation)
-- For long-running alerts, sample traces from start, middle, and current window
+- Expands search window by +/- 5 minutes from alert active period
+- For alerts >30 minutes, samples traces from start, middle, and recent windows (deduped by spanId)
 
 ### 3.3 — SLO Burn Rate -> Trace Correlation
 
-When SLO burn rate alert fires:
-1. Identify the window where error budget burned fastest
-2. Query error traces from that specific window
-3. Group by `status.code` and span attributes to surface dominant failure mode
-4. Show: "78% of errors were connection_refused to payment-db"
+- Accepts optional `sloQuery` parameter for burn rate metric enrichment
+- Groups error traces by `exception.message`, `peer.service`, `otel.status_description`
+- Surfaces top 5 dominant failure modes with percentage breakdown and example trace IDs
 
 ---
 

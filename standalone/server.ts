@@ -85,12 +85,15 @@ import { PrometheusMetadataService } from '../common/prometheus_metadata_service
 import { OtelServiceDiscoveryService } from '../common/otel_service_discovery';
 import { handleListServices, handleGetService } from '../server/routes/service_handlers';
 import type { PrometheusMetadataProvider } from '../common/types';
-import { MockOtelProvider } from '../common/testing';
+import { MockOtelProvider, MockCorrelationProvider } from '../common/testing';
 import { SloSuggestionEngine } from '../common/slo_suggestion_engine';
 import {
   handleGetSloSuggestions,
   handleGetServiceBadges,
 } from '../server/routes/suggestion_handlers';
+import { AlertCorrelationService } from '../common/alert_correlation_service';
+import { handleGetAlertCorrelations } from '../server/routes/correlation_handlers';
+import type { UnifiedAlertSummary } from '../common/types';
 
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE === 'true';
@@ -230,6 +233,11 @@ async function initBackends(): Promise<void> {
     suggestionEngine = new SloSuggestionEngine(metadataService, sloService, logger);
     logger.info('SloSuggestionEngine initialized');
   }
+
+  // Initialize alert correlation service (mock provider in standalone mode)
+  const correlationProvider = new MockCorrelationProvider();
+  correlationService = new AlertCorrelationService(correlationProvider, logger);
+  logger.info('AlertCorrelationService initialized (mock provider)');
 }
 
 // Suppression service
@@ -243,6 +251,7 @@ const sloService = new SloService(logger, MOCK_MODE);
 let metadataService: PrometheusMetadataService | undefined;
 let otelService: OtelServiceDiscoveryService | undefined;
 let suggestionEngine: SloSuggestionEngine | undefined;
+let correlationService: AlertCorrelationService | undefined;
 
 const app = express();
 app.use(express.json());
@@ -434,6 +443,34 @@ app.get('/api/services/:name', async (req, res) => {
 app.get('/api/apm-config', async (_req, res) => {
   // Standalone has no APM config saved objects
   res.json({ configured: false });
+});
+
+// ============================================================================
+// Alert Correlation Routes
+// ============================================================================
+
+app.post('/api/correlations', async (req, res) => {
+  if (!correlationService) {
+    return res.json({
+      alertId: '',
+      serviceName: '',
+      timeWindow: { start: 0, end: 0 },
+      traces: [],
+      logs: [],
+      metrics: [],
+      failureModes: [],
+      tracesSampled: false,
+    });
+  }
+  const { alert, sloQuery, datasourceId } = req.body;
+  const r = await handleGetAlertCorrelations(
+    correlationService,
+    alert as UnifiedAlertSummary,
+    sloQuery,
+    datasourceId,
+    logger
+  );
+  res.status(r.status).json(r.body);
 });
 
 // ============================================================================

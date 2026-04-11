@@ -24,6 +24,11 @@ import {
   OtelService,
   OtelSignals,
   OtelServiceDiscoveryProvider,
+  AlertCorrelationProvider,
+  CorrelatedTrace,
+  CorrelatedLog,
+  CorrelatedMetric,
+  CorrelationTimeWindow,
 } from './types';
 import { MOCK_METRICS, MOCK_LABEL_NAMES, MOCK_LABEL_VALUES } from './mock_data';
 
@@ -1429,6 +1434,260 @@ export class MockOtelProvider implements OtelServiceDiscoveryProvider {
     return { hasTraces: true, hasLogs: true, hasMetrics: true };
   }
 }
+
+// ============================================================================
+// Mock Alert Correlation Provider
+// ============================================================================
+
+export class MockCorrelationProvider implements AlertCorrelationProvider {
+  async getCorrelatedTraces(
+    serviceName: string,
+    window: CorrelationTimeWindow,
+    maxResults = 50
+  ): Promise<CorrelatedTrace[]> {
+    const baseTime = new Date(window.start + (window.end - window.start) / 2);
+    const traces: CorrelatedTrace[] = [];
+
+    // Generate realistic error traces based on service
+    const patterns = MOCK_TRACE_PATTERNS[serviceName] ?? MOCK_TRACE_PATTERNS['default'];
+    for (let i = 0; i < Math.min(patterns.length, maxResults); i++) {
+      const p = patterns[i];
+      const ts = new Date(baseTime.getTime() + i * 1000);
+      traces.push({
+        traceId: `trace-${serviceName}-${i}-${ts.getTime().toString(36)}`,
+        spanId: `span-${serviceName}-${i}`,
+        serviceName,
+        operationName: p.operation,
+        statusCode: 2, // Error
+        durationMs: p.durationMs,
+        startTime: ts.toISOString(),
+        attributes: p.attributes,
+      });
+    }
+    return traces;
+  }
+
+  async getCorrelatedLogs(
+    serviceName: string,
+    window: CorrelationTimeWindow,
+    maxResults = 100
+  ): Promise<CorrelatedLog[]> {
+    const baseTime = new Date(window.start + (window.end - window.start) / 2);
+    const logs: CorrelatedLog[] = [];
+
+    const messages = MOCK_LOG_MESSAGES[serviceName] ?? MOCK_LOG_MESSAGES['default'];
+    for (let i = 0; i < Math.min(messages.length, maxResults); i++) {
+      const m = messages[i];
+      const ts = new Date(baseTime.getTime() + i * 500);
+      logs.push({
+        timestamp: ts.toISOString(),
+        serviceName,
+        severityText: m.severity,
+        body: m.body,
+        traceId: i < 3 ? `trace-${serviceName}-${i}-${baseTime.getTime().toString(36)}` : undefined,
+        spanId: i < 3 ? `span-${serviceName}-${i}` : undefined,
+        attributes: { 'deployment.environment': 'production' },
+      });
+    }
+    return logs;
+  }
+
+  async getCorrelatedMetrics(
+    serviceName: string,
+    window: CorrelationTimeWindow
+  ): Promise<CorrelatedMetric[]> {
+    const step = 60_000; // 1-minute resolution
+    const points = [];
+    for (let t = window.start; t <= window.end; t += step) {
+      // Simulate error rate spike
+      const base = 0.02;
+      const midpoint = (window.start + window.end) / 2;
+      const dist = Math.abs(t - midpoint) / ((window.end - window.start) / 2);
+      const spike = base + (1 - dist) * 0.08; // peaks at 10% in the middle
+      points.push({ timestamp: Math.floor(t / 1000), value: Math.round(spike * 1000) / 1000 });
+    }
+
+    return [
+      {
+        metricName: 'http_error_rate',
+        labels: { service: serviceName },
+        dataPoints: points,
+        description: 'HTTP 5xx error rate',
+      },
+    ];
+  }
+}
+
+/** Mock trace patterns per service for realistic error traces. */
+const MOCK_TRACE_PATTERNS: Record<
+  string,
+  Array<{ operation: string; durationMs: number; attributes: Record<string, string> }>
+> = {
+  'payment-service': [
+    {
+      operation: 'POST /api/charge',
+      durationMs: 2340,
+      attributes: {
+        'http.status_code': '500',
+        'exception.message': 'Connection refused to payment-db',
+        'peer.service': 'postgres',
+      },
+    },
+    {
+      operation: 'POST /api/charge',
+      durationMs: 5120,
+      attributes: {
+        'http.status_code': '504',
+        'exception.message': 'Gateway timeout waiting for payment-db',
+        'peer.service': 'postgres',
+      },
+    },
+    {
+      operation: 'POST /api/refund',
+      durationMs: 3200,
+      attributes: {
+        'http.status_code': '500',
+        'exception.message': 'Connection refused to payment-db',
+        'peer.service': 'postgres',
+      },
+    },
+    {
+      operation: 'GET /api/status',
+      durationMs: 150,
+      attributes: {
+        'http.status_code': '500',
+        'exception.message': 'Health check failed: database unreachable',
+        'db.system': 'postgresql',
+      },
+    },
+    {
+      operation: 'POST /api/charge',
+      durationMs: 4500,
+      attributes: {
+        'http.status_code': '503',
+        'exception.message': 'Circuit breaker open for payment-db',
+        'peer.service': 'postgres',
+      },
+    },
+  ],
+  'order-service': [
+    {
+      operation: 'POST /api/orders',
+      durationMs: 1800,
+      attributes: {
+        'http.status_code': '500',
+        'exception.message': 'Failed to create order: payment service unavailable',
+        'peer.service': 'payment-service',
+      },
+    },
+    {
+      operation: 'POST /api/orders',
+      durationMs: 3500,
+      attributes: {
+        'http.status_code': '502',
+        'exception.message': 'Bad gateway from payment-service',
+        'peer.service': 'payment-service',
+      },
+    },
+    {
+      operation: 'GET /api/orders/123',
+      durationMs: 450,
+      attributes: {
+        'http.status_code': '500',
+        'exception.message': 'Database connection pool exhausted',
+        'db.system': 'postgresql',
+      },
+    },
+  ],
+  'api-gateway': [
+    {
+      operation: 'POST /api/checkout',
+      durationMs: 6200,
+      attributes: {
+        'http.status_code': '502',
+        'exception.message': 'Bad gateway from order-service',
+        'peer.service': 'order-service',
+      },
+    },
+    {
+      operation: 'POST /api/checkout',
+      durationMs: 5800,
+      attributes: {
+        'http.status_code': '504',
+        'exception.message': 'Gateway timeout from order-service',
+        'peer.service': 'order-service',
+      },
+    },
+    {
+      operation: 'GET /api/health',
+      durationMs: 200,
+      attributes: {
+        'http.status_code': '200',
+        'otel.status_description': 'Degraded: 2 of 3 backends unhealthy',
+      },
+    },
+  ],
+  default: [
+    {
+      operation: 'POST /api/request',
+      durationMs: 2000,
+      attributes: { 'http.status_code': '500', 'exception.message': 'Internal server error' },
+    },
+    {
+      operation: 'GET /api/health',
+      durationMs: 300,
+      attributes: { 'http.status_code': '503', 'exception.message': 'Service unavailable' },
+    },
+  ],
+};
+
+/** Mock log messages per service. */
+const MOCK_LOG_MESSAGES: Record<string, Array<{ severity: string; body: string }>> = {
+  'payment-service': [
+    {
+      severity: 'ERROR',
+      body: 'FATAL: connection to database "payments" at "payment-db:5432" refused',
+    },
+    {
+      severity: 'ERROR',
+      body: 'Failed to execute charge: org.postgresql.util.PSQLException: Connection refused',
+    },
+    { severity: 'ERROR', body: 'Circuit breaker "payment-db" opened after 5 consecutive failures' },
+    {
+      severity: 'FATAL',
+      body: 'Health check failed: database unreachable for 30 seconds, marking unhealthy',
+    },
+    {
+      severity: 'ERROR',
+      body: 'Retry attempt 3/3 failed for charge request txn-4829: connection refused',
+    },
+  ],
+  'order-service': [
+    { severity: 'ERROR', body: 'Payment service returned 502 for order ord-9182: Bad Gateway' },
+    {
+      severity: 'ERROR',
+      body: 'Failed to process order: upstream service unavailable (payment-service)',
+    },
+    {
+      severity: 'ERROR',
+      body: 'Connection pool exhausted: max connections (50) reached for postgres',
+    },
+    {
+      severity: 'FATAL',
+      body: 'Order processing halted: critical dependency payment-service is down',
+    },
+  ],
+  'api-gateway': [
+    { severity: 'ERROR', body: 'Upstream order-service returned 502 for POST /api/checkout' },
+    { severity: 'ERROR', body: 'Request timeout after 5000ms waiting for order-service response' },
+    { severity: 'ERROR', body: 'Health check degraded: 2 of 3 backend services unhealthy' },
+  ],
+  default: [
+    { severity: 'ERROR', body: 'Request failed with status 500: Internal Server Error' },
+    { severity: 'ERROR', body: 'Unhandled exception in request handler' },
+    { severity: 'FATAL', body: 'Service health check failed' },
+  ],
+};
 
 /** Infer Prometheus metric type from name suffix heuristics. */
 function inferMetricType(name: string): PrometheusMetricMetadata['type'] {

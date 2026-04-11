@@ -32,6 +32,7 @@ import {
 } from '@elastic/eui';
 import { UnifiedAlert, Datasource } from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
+import { AlertCorrelationPanel } from './alert_correlation_panel';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'danger',
@@ -218,6 +219,33 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
         </EuiAccordion>
 
         <EuiSpacer size="m" />
+
+        {/* Cross-Signal Correlations (Phase 3) — shown when alert has a service label */}
+        {alertData.labels?.service && (
+          <>
+            <EuiAccordion
+              id={`alertCorrelations-${alert.id}`}
+              buttonContent={
+                <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                  <EuiFlexItem grow={false}>
+                    <EuiIcon type="crosshairs" />
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <strong>Cross-Signal Correlations</strong>
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiBadge color="hollow">{alertData.labels.service}</EuiBadge>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+              }
+              initialIsOpen={true}
+              paddingSize="m"
+            >
+              <AlertCorrelationPanel alert={alertData} apiClient={apiClient} />
+            </EuiAccordion>
+            <EuiSpacer size="m" />
+          </>
+        )}
 
         {/* Labels (internal keys filtered — see INTERNAL_LABEL_KEYS) */}
         <EuiAccordion

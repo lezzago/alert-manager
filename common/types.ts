@@ -755,6 +755,100 @@ export function isOtelProvider(obj: unknown): obj is OtelServiceDiscoveryProvide
 }
 
 // ============================================================================
+// Alert Correlation (Phase 3: Cross-Signal Correlation)
+// ============================================================================
+
+/** Time window for correlation queries. */
+export interface CorrelationTimeWindow {
+  start: number; // epoch ms
+  end: number; // epoch ms
+}
+
+/** A correlated trace span from ss4o_traces-*-*. */
+export interface CorrelatedTrace {
+  traceId: string;
+  spanId: string;
+  serviceName: string;
+  operationName: string;
+  statusCode: number; // 0=Unset, 1=Ok, 2=Error
+  durationMs: number;
+  startTime: string; // ISO
+  attributes: Record<string, string>;
+}
+
+/** A correlated log entry from ss4o_logs-*-*. */
+export interface CorrelatedLog {
+  timestamp: string; // ISO
+  serviceName: string;
+  severityText: string; // ERROR, FATAL, WARN, etc.
+  body: string;
+  traceId?: string;
+  spanId?: string;
+  attributes: Record<string, string>;
+}
+
+/** A correlated metric data point. */
+export interface CorrelatedMetric {
+  metricName: string;
+  labels: Record<string, string>;
+  dataPoints: Array<{ timestamp: number; value: number }>;
+  description?: string;
+}
+
+/** Dominant failure mode from SLO burn rate trace correlation. */
+export interface FailureMode {
+  pattern: string; // e.g. "connection_refused to payment-db"
+  percentage: number; // 0-100
+  count: number;
+  exampleTraceIds: string[];
+}
+
+/** Full correlation result for an alert. */
+export interface AlertCorrelationResult {
+  alertId: string;
+  serviceName: string;
+  timeWindow: CorrelationTimeWindow;
+  traces: CorrelatedTrace[];
+  logs: CorrelatedLog[];
+  metrics: CorrelatedMetric[];
+  /** Dominant failure modes (populated for SLO burn rate alerts). */
+  failureModes: FailureMode[];
+  /** Whether trace results were sampled (long-running alerts). */
+  tracesSampled: boolean;
+}
+
+/** Provider interface for fetching correlated signals from OpenSearch. */
+export interface AlertCorrelationProvider {
+  getCorrelatedTraces(
+    serviceName: string,
+    window: CorrelationTimeWindow,
+    maxResults?: number
+  ): Promise<CorrelatedTrace[]>;
+
+  getCorrelatedLogs(
+    serviceName: string,
+    window: CorrelationTimeWindow,
+    maxResults?: number
+  ): Promise<CorrelatedLog[]>;
+
+  getCorrelatedMetrics(
+    serviceName: string,
+    window: CorrelationTimeWindow
+  ): Promise<CorrelatedMetric[]>;
+}
+
+/** Runtime check for AlertCorrelationProvider interface. */
+export function isCorrelationProvider(obj: unknown): obj is AlertCorrelationProvider {
+  if (!obj || typeof obj !== 'object') return false;
+  const c = obj as Record<string, unknown>;
+  return (
+    typeof c.getCorrelatedTraces === 'function' &&
+    typeof c.getCorrelatedLogs === 'function' &&
+    typeof c.getCorrelatedMetrics === 'function'
+  );
+}
+
+// ============================================================================
 // Logger
 // ============================================================================
 

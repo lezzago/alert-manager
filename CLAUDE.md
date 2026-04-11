@@ -127,6 +127,14 @@ yarn start --config config/opensearch_dashboards.dev.yml
 - 3 API routes: list services, get service, get APM config
 - Frontend: `ServicesTab` component with stat cards, searchable table, detail flyout
 
+**Alert correlation**: `AlertCorrelationProvider` interface (`common/types.ts`) for cross-signal correlation:
+- Implemented by `OpenSearchCorrelationProvider` (queries `ss4o_traces-*-*`, `ss4o_logs-*-*`) and `MockCorrelationProvider` (MOCK_MODE)
+- `AlertCorrelationService` (`common/alert_correlation_service.ts`) orchestrates traces/logs/metrics with 2-min cache
+- Time window intelligence: +/- 5 min expansion, 3-window sampling for long-running alerts
+- Failure mode analysis: groups error traces by attributes to surface dominant failure patterns
+- `AlertCorrelationPanel` in alert detail flyout with Traces/Logs/Metrics sub-tabs
+- 1 API route: POST correlations (accepts alert summary, returns correlated signals)
+
 **Prometheus metadata**: `PrometheusMetadataProvider` interface (`common/types.ts`) for metric/label discovery:
 - Implemented by `DirectQueryPrometheusBackend` (live) and `MockBackend` (MOCK_MODE)
 - Wrapped by `PrometheusMetadataService` (`common/prometheus_metadata_service.ts`) with stale-while-revalidate caching
@@ -170,6 +178,10 @@ yarn start --config config/opensearch_dashboards.dev.yml
 | **SLI Section** | `public/components/sli_section.tsx` | Extracted SLI form with `useReducer`, autocomplete |
 | **SLO Wizard** | `public/components/create_slo_wizard.tsx` | Multi-step SLO creation orchestrator |
 | **EUI Mocks** | `public/__mocks__/eui_mock.tsx` | OUI component test mocks (add new ones here) |
+| **Correlation Service** | `common/alert_correlation_service.ts` | Cross-signal correlation orchestrator with caching + failure mode analysis |
+| **Correlation Provider** | `common/opensearch_correlation_provider.ts` | Live DSL queries against `ss4o_traces-*-*` and `ss4o_logs-*-*` |
+| **Correlation Handlers** | `server/routes/correlation_handlers.ts` | Framework-agnostic handler for correlation API |
+| **Correlation Panel** | `public/components/alert_correlation_panel.tsx` | Traces/Logs/Metrics sub-tabs in alert detail flyout |
 | **Build Script** | `build.sh` | Thin wrapper around `yarn plugin-helpers build` |
 
 ## Testing
@@ -180,13 +192,13 @@ Two projects in `jest.config.js`:
 - `server` -- Node environment, tests in `common/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
-Current: **37 test files, 962 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
+Current: **42 test files, 1007 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
 
 OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new OUI components to production code, check if a mock exists -- components needing interaction in tests (click handlers, selectable props, role attributes) require explicit mocks.
 
 ### E2E Tests (Cypress)
 
-10 spec files in `cypress/e2e/` with **93 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10). Two modes:
+11 spec files in `cypress/e2e/` with **101 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8). Two modes:
 
 **Standalone mode** (default, fast, no Docker needed):
 ```bash

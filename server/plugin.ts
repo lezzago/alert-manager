@@ -26,9 +26,16 @@ import {
   ApmConfigReader,
   OpenSearchOtelProvider,
 } from '../common';
-import { MockOpenSearchBackend, MockPrometheusBackend, MockOtelProvider } from '../common/testing';
+import {
+  MockOpenSearchBackend,
+  MockPrometheusBackend,
+  MockOtelProvider,
+  MockCorrelationProvider,
+} from '../common/testing';
 import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
 import { SloSuggestionEngine } from '../common/slo_suggestion_engine';
+import { AlertCorrelationService } from '../common/alert_correlation_service';
+import { OpenSearchCorrelationProvider } from '../common/opensearch_correlation_provider';
 import { SavedObjectSloStore } from './slo_saved_object_store';
 import { HttpClient } from '../common/http_client';
 import type { SavedObjectsRepository } from '../common/apm_config_reader';
@@ -320,6 +327,37 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       this.logger.info('alertManager: SloSuggestionEngine initialized');
     }
 
+    // Create alert correlation service for cross-signal correlation (Phase 3).
+    // Uses mock or live OpenSearch provider depending on mode.
+    let correlationService: AlertCorrelationService | undefined;
+    try {
+      if (mockMode) {
+        const correlationProvider = new MockCorrelationProvider();
+        correlationService = new AlertCorrelationService(correlationProvider, logger);
+      } else if (osUrl && osAuth) {
+        const corrHttpClient = new HttpClient(logger);
+        const correlationProvider = new OpenSearchCorrelationProvider(
+          corrHttpClient,
+          osUrl,
+          osAuth,
+          false,
+          logger
+        );
+        correlationService = new AlertCorrelationService(correlationProvider, logger);
+      }
+      if (correlationService) {
+        this.logger.info(
+          `alertManager: AlertCorrelationService initialized (${mockMode ? 'mock' : 'live'})`
+        );
+      }
+    } catch (err: unknown) {
+      this.logger.warn(
+        `alertManager: Failed to initialize AlertCorrelationService: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+
     defineRoutes(
       router,
       datasourceService,
@@ -331,7 +369,8 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       otelService,
       apmConfigReader,
       () => this.apmRepository,
-      suggestionEngine
+      suggestionEngine,
+      correlationService
     );
 
     return {};

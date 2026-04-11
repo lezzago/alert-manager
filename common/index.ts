@@ -47,6 +47,8 @@ export type { SloValidationResult } from './slo_validators';
 export { OtelServiceDiscoveryService } from './otel_service_discovery';
 export { ApmConfigReader } from './apm_config_reader';
 export { OpenSearchOtelProvider } from './opensearch_otel_provider';
+export { AlertCorrelationService } from './alert_correlation_service';
+export { OpenSearchCorrelationProvider } from './opensearch_correlation_provider';
 
 export type { AlertManagerError, NotFoundError, ValidationError, InternalError } from './errors';
 export {

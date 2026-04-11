@@ -30,6 +30,7 @@ import type {
   SloSuggestionsResponse,
   SuggestionBadgeData,
 } from '../../common/slo_suggestion_types';
+import type { AlertCorrelationResult } from '../../common/types';
 
 // ---------------------------------------------------------------------------
 // HttpClient interface — implemented by OSD's http service adapter or fetch()
@@ -152,6 +153,7 @@ interface ApiPaths {
   serviceDetail: (name: string) => string;
   sloSuggestions: (serviceName: string) => string;
   apmConfig: string;
+  correlations: string;
 }
 
 const OSD_PATHS: ApiPaths = {
@@ -181,6 +183,7 @@ const OSD_PATHS: ApiPaths = {
   serviceDetail: (name) => `/api/alerting/services/${encodeURIComponent(name)}`,
   sloSuggestions: (name) => `/api/alerting/services/${encodeURIComponent(name)}/slo-suggestions`,
   apmConfig: '/api/alerting/apm-config',
+  correlations: '/api/alerting/correlations',
 };
 
 const STANDALONE_PATHS: ApiPaths = {
@@ -209,6 +212,7 @@ const STANDALONE_PATHS: ApiPaths = {
   serviceDetail: (name) => `/api/services/${encodeURIComponent(name)}`,
   sloSuggestions: (name) => `/api/services/${encodeURIComponent(name)}/slo-suggestions`,
   apmConfig: '/api/apm-config',
+  correlations: '/api/correlations',
 };
 
 // ---------------------------------------------------------------------------
@@ -487,6 +491,45 @@ export class AlarmsApiClient {
       return res.badges ?? {};
     } catch {
       return {};
+    }
+  }
+
+  // ---- Alert Correlations --------------------------------------------------
+
+  async getAlertCorrelations(
+    alert: UnifiedAlertSummary,
+    sloQuery?: string,
+    datasourceId?: string
+  ): Promise<AlertCorrelationResult> {
+    const emptyResult: AlertCorrelationResult = {
+      alertId: alert.id,
+      serviceName: alert.labels?.service ?? '',
+      timeWindow: { start: 0, end: 0 },
+      traces: [],
+      logs: [],
+      metrics: [],
+      failureModes: [],
+      tracesSampled: false,
+    };
+    try {
+      return await this.http.post<AlertCorrelationResult>(this.paths.correlations, {
+        alert: {
+          id: alert.id,
+          datasourceId: alert.datasourceId,
+          datasourceType: alert.datasourceType,
+          name: alert.name,
+          state: alert.state,
+          severity: alert.severity,
+          startTime: alert.startTime,
+          lastUpdated: alert.lastUpdated,
+          labels: alert.labels,
+          annotations: alert.annotations,
+        },
+        sloQuery,
+        datasourceId,
+      });
+    } catch {
+      return emptyResult;
     }
   }
 

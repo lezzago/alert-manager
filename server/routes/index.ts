@@ -63,7 +63,9 @@ import type { ApmConfigReader, SavedObjectsRepository } from '../../common/apm_c
 import { handleGetAlertmanagerConfig } from './alertmanager_handlers';
 import { handleListServices, handleGetService, handleGetApmConfig } from './service_handlers';
 import { handleGetSloSuggestions, handleGetServiceBadges } from './suggestion_handlers';
+import { handleGetAlertCorrelations } from './correlation_handlers';
 import type { SloSuggestionEngine } from '../../common/slo_suggestion_engine';
+import type { AlertCorrelationService } from '../../common/alert_correlation_service';
 
 export function defineRoutes(
   router: IRouter,
@@ -76,7 +78,8 @@ export function defineRoutes(
   otelService?: OtelServiceDiscoveryService,
   apmConfigReader?: ApmConfigReader,
   getApmRepository?: () => SavedObjectsRepository | undefined,
-  suggestionEngine?: SloSuggestionEngine
+  suggestionEngine?: SloSuggestionEngine,
+  correlationService?: AlertCorrelationService
 ) {
   // Datasource routes
   router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
@@ -849,5 +852,50 @@ export function defineRoutes(
       const result = await handleGetApmConfig(apmConfigReader, repository, logger);
       return res.ok({ body: result.body });
     });
+  }
+
+  // --------------------------------------------------------------------------
+  // Alert Correlation routes (optional — only when correlation service available)
+  // --------------------------------------------------------------------------
+
+  if (correlationService) {
+    router.post(
+      {
+        path: '/api/alerting/correlations',
+        validate: {
+          body: schema.object({
+            alert: schema.object({
+              id: schema.string(),
+              datasourceId: schema.string(),
+              datasourceType: schema.string(),
+              name: schema.string(),
+              state: schema.string(),
+              severity: schema.string(),
+              startTime: schema.string(),
+              lastUpdated: schema.string(),
+              labels: schema.recordOf(schema.string(), schema.string(), { defaultValue: {} }),
+              annotations: schema.recordOf(schema.string(), schema.string(), { defaultValue: {} }),
+            }),
+            sloQuery: schema.maybe(schema.string()),
+            datasourceId: schema.maybe(schema.string()),
+          }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const { alert, sloQuery, datasourceId } = req.body as {
+          alert: Record<string, unknown>;
+          sloQuery?: string;
+          datasourceId?: string;
+        };
+        const result = await handleGetAlertCorrelations(
+          correlationService,
+          alert as unknown as import('../../common/types').UnifiedAlertSummary,
+          sloQuery,
+          datasourceId,
+          logger
+        );
+        return res.ok({ body: result.body });
+      }
+    );
   }
 }

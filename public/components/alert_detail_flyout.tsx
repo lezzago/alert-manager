@@ -32,6 +32,7 @@ import {
 } from '@elastic/eui';
 import { UnifiedAlert, Datasource } from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
+import type { NavigationService } from '../services/navigation_service';
 import { AlertCorrelationPanel } from './alert_correlation_panel';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -65,6 +66,7 @@ export interface AlertDetailFlyoutProps {
   alert: UnifiedAlert;
   datasources: Datasource[];
   apiClient: AlarmsApiClient;
+  navigationService?: NavigationService;
   onClose: () => void;
   onAcknowledge: (alertId: string) => void;
   onSilence: (alertId: string) => void;
@@ -74,6 +76,7 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
   alert,
   datasources,
   apiClient,
+  navigationService,
   onClose,
   onAcknowledge,
   onSilence,
@@ -241,7 +244,11 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
               initialIsOpen={true}
               paddingSize="m"
             >
-              <AlertCorrelationPanel alert={alertData} apiClient={apiClient} />
+              <AlertCorrelationPanel
+                alert={alertData}
+                apiClient={apiClient}
+                navigationService={navigationService}
+              />
             </EuiAccordion>
             <EuiSpacer size="m" />
           </>
@@ -587,11 +594,12 @@ function getSuggestedActions(alert: UnifiedAlert): SuggestedAction[] {
 
   if (alert.labels?.service) {
     actions.push({
-      title: `Review ${alert.labels.service} service health`,
-      description: 'Check service-level metrics, recent deployments, and dependency health.',
-      icon: 'apps',
-      color: 'default',
-      actionType: 'manual',
+      title: `View ${alert.labels.service} in APM`,
+      description: 'Open APM service details with traces, metrics, and dependency map.',
+      icon: 'popout',
+      color: 'primary',
+      actionType: 'link',
+      url: `/app/observability-traces#/services/${encodeURIComponent(alert.labels.service)}`,
     });
   }
 

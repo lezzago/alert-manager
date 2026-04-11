@@ -19,6 +19,7 @@ import {
   EuiHealth,
 } from '@elastic/eui';
 import type { AlarmsApiClient } from '../services/alarms_client';
+import type { NavigationService } from '../services/navigation_service';
 import type { EnrichedOtelService } from '../../common/types';
 import type { SloInput } from '../../common/slo_types';
 import type { SuggestionBadgeData } from '../../common/slo_suggestion_types';
@@ -27,6 +28,13 @@ import { CreateSloWizard } from './create_slo_wizard';
 
 interface ServicesTabProps {
   apiClient: AlarmsApiClient;
+  navigationService?: NavigationService;
+  /** Service name from URL hash to auto-open detail flyout. */
+  initialServiceName?: string;
+  /** Callback when a service is selected (updates URL hash). */
+  onServiceSelect?: (serviceName: string) => void;
+  /** Callback when service detail is closed (clears URL hash). */
+  onServiceClose?: () => void;
 }
 
 const errorBudgetColor = (budget?: number): string => {
@@ -42,7 +50,13 @@ const alertHealthColor = (count: number): string => {
   return 'danger';
 };
 
-export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
+export const ServicesTab: React.FC<ServicesTabProps> = ({
+  apiClient,
+  navigationService,
+  initialServiceName,
+  onServiceSelect,
+  onServiceClose,
+}) => {
   const [services, setServices] = useState<EnrichedOtelService[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +93,14 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
     fetchServices();
     fetchBadges();
   }, [fetchServices, fetchBadges]);
+
+  // Restore selected service from URL hash on mount
+  useEffect(() => {
+    if (initialServiceName && services.length > 0 && !selectedService) {
+      const svc = services.find((s) => s.name === initialServiceName);
+      if (svc) setSelectedService(svc);
+    }
+  }, [initialServiceName, services, selectedService]);
 
   const filtered = useMemo(() => {
     let result = services;
@@ -119,11 +141,15 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
             role="button"
             tabIndex={0}
             style={{ cursor: 'pointer', fontWeight: 600 }}
-            onClick={() => setSelectedService(svc)}
+            onClick={() => {
+              setSelectedService(svc);
+              onServiceSelect?.(svc.name);
+            }}
             onKeyDown={(e: React.KeyboardEvent) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 setSelectedService(svc);
+                onServiceSelect?.(svc.name);
               }
             }}
             data-test-subj={`service-name-${name}`}
@@ -367,10 +393,15 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
       {selectedService && (
         <ServiceDetailFlyout
           service={selectedService}
-          onClose={() => setSelectedService(null)}
+          onClose={() => {
+            setSelectedService(null);
+            onServiceClose?.();
+          }}
           apiClient={apiClient}
+          navigationService={navigationService}
           onCreateSlo={(prefill) => {
             setSelectedService(null);
+            onServiceClose?.();
             setWizardPrefill(prefill);
           }}
         />

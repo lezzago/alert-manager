@@ -153,6 +153,11 @@ function createMockApiClient(
 // ---------------------------------------------------------------------------
 
 describe('AlarmsPage', () => {
+  beforeEach(() => {
+    // Reset URL hash between tests so useHashRouting starts fresh
+    window.location.hash = '';
+  });
+
   it('renders the page heading', async () => {
     const apiClient = createMockApiClient();
     render(<AlarmsPage apiClient={apiClient} />);

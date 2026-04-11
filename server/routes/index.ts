@@ -64,6 +64,7 @@ import { handleGetAlertmanagerConfig } from './alertmanager_handlers';
 import { handleListServices, handleGetService, handleGetApmConfig } from './service_handlers';
 import { handleGetSloSuggestions, handleGetServiceBadges } from './suggestion_handlers';
 import { handleGetAlertCorrelations } from './correlation_handlers';
+import { handleServiceHealth } from './service_health_handlers';
 import type { SloSuggestionEngine } from '../../common/slo_suggestion_engine';
 import type { AlertCorrelationService } from '../../common/alert_correlation_service';
 
@@ -812,6 +813,23 @@ export function defineRoutes(
       },
       async (_ctx, req, res) => {
         const result = await handleGetService(otelService, req.params.name, logger);
+        if (result.status === 200) return res.ok({ body: result.body });
+        return res.notFound({
+          body: {
+            message: String((result.body as Record<string, unknown>)?.error || 'Service not found'),
+          },
+        });
+      }
+    );
+
+    // Service health (for APM -> Alert Manager integration)
+    router.get(
+      {
+        path: '/api/alerting/services/{name}/health',
+        validate: { params: schema.object({ name: schema.string() }) },
+      },
+      async (_ctx, req, res) => {
+        const result = await handleServiceHealth(req.params.name, otelService, sloService, logger);
         if (result.status === 200) return res.ok({ body: result.body });
         return res.notFound({
           body: {

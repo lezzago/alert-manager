@@ -10,7 +10,7 @@ import { AppPluginStartDependencies } from './types';
 import { AlarmsApp } from './components/app';
 
 export const renderApp = (
-  { notifications, http }: CoreStart,
+  { notifications, http, application }: CoreStart,
   { navigation }: AppPluginStartDependencies,
   { appBasePath, element }: AppMountParameters
 ) => {
@@ -20,6 +20,7 @@ export const renderApp = (
       notifications={notifications}
       http={http}
       navigation={navigation}
+      application={application}
     />,
     element
   );

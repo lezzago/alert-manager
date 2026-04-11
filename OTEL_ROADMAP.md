@@ -11,7 +11,7 @@ Transform the Alert Manager from an isolated alerting tool into an integrated ob
 | **Phase 1** | **Done** | OTEL service discovery, APM config reading, Services tab |
 | **Phase 2** | **Done** | SLO suggestion engine based on discovered metrics |
 | **Phase 3** | **Done** | Cross-signal correlation (traces + logs on alerts) |
-| **Phase 4** | Not started | Bidirectional deep links (Alert Manager <-> APM) |
+| **Phase 4** | **Done** | Bidirectional deep links (Alert Manager <-> APM) |
 | **Phase 5** | Not started | Service health dashboard with topology map |
 | **Phase 6** | Not started | Intelligent root cause suggestion engine |
 
@@ -92,36 +92,54 @@ Transform the Alert Manager from an isolated alerting tool into an integrated ob
 
 ---
 
-## Phase 4: Deep Links (Bidirectional)
+## Phase 4: Deep Links — Bidirectional (DONE)
 
 **Goal**: Seamless navigation between Alert Manager and APM using `navigateToApp()`.
 
+**What was built:**
+- Hash-based URL routing: `#/alerts`, `#/alerts/{dsId}/{alertId}`, `#/slos/{id}`, `#/services/{name}`, etc.
+- `useHashRouting` hook — bidirectional sync between URL hash and component state (tab + flyout)
+- `NavigationService` — wraps OSD `navigateToApp()` for cross-app SPA navigation, URL fallback for standalone
+- Deep link URL builders in `common/deep_links.ts`: APM service, trace explorer, log explorer URLs
+- Clickable trace IDs in correlation panel → APM Trace Explorer
+- Clickable log trace IDs → APM Trace Explorer
+- "View all logs" link → Log Explorer with service filter
+- "View in APM" button in service detail flyout → APM service details
+- "View in APM" action in alert detail flyout for alerts with `service` label
+- Service health API: `GET /api/alerting/services/{name}/health` — enables APM to show Alert Manager data
+- `core.application` threaded from OSD plugin mount → NavigationService → components
+- 38 new unit tests (deep_links + navigation_service + service_health_handlers)
+- 12 new Cypress E2E tests (hash routing, APM links, service health API)
+
 ### 4.1 — Alert Manager -> APM
 
-| From | Target |
-|------|--------|
-| Alert with `service` label | APM service details with time range |
-| Correlated trace row | Trace explorer with traceId |
-| Correlated log entry | Log explorer with query |
-| SLO for a service | APM service overview |
-| Service on Services tab | APM service map focused on service |
+| From | Target | Implementation |
+|------|--------|----------------|
+| Alert with `service` label | APM service details with time range | `NavigationService.navigateToApmServiceFromAlert()` |
+| Correlated trace row | Trace explorer with traceId | Clickable `EuiLink` → `navigateToTrace()` |
+| Correlated log entry | Log explorer with query | "View all logs" link → `navigateToLogs()` |
+| SLO for a service | APM service overview | Via service label navigation |
+| Service on Services tab | APM service map focused on service | "View in APM" button → `navigateToApmService()` |
 
 ### 4.2 — APM -> Alert Manager
 
-Register Alert Manager as a data source on APM service details page:
-- **Active Alerts Panel**: Badge count + severity breakdown + "View All" link
-- **SLO Health Badges**: SLO attainment + error budget gauge
-- **"Create SLO" nudge**: When service has no SLOs, suggest creation
+Service health API enables external apps to query Alert Manager data:
+- `GET /api/alerting/services/{name}/health` returns alert count, severity breakdown, SLO summaries, deep link URL
+- Response includes `alertManagerUrl` hash route for linking back to Alert Manager
 
 ### 4.3 — URL-Based Routing in Alert Manager
 
-Add hash-based routing:
+Hash-based routing with bidirectional URL ↔ state sync:
 ```
-#/alerts/{id}       -> Alert detail with correlation panel
-#/rules/{id}        -> Rule detail
-#/slos/{id}         -> SLO detail
-#/services          -> Services tab
-#/services/{name}   -> Service detail
+#/alerts                    -> Alerts tab
+#/alerts/{dsId}/{alertId}   -> Alert detail flyout
+#/rules                     -> Rules tab
+#/slos                      -> SLOs tab
+#/slos/{id}                 -> SLO detail flyout
+#/services                  -> Services tab
+#/services/{name}           -> Service detail flyout
+#/routing                   -> Routing tab
+#/suppression               -> Suppression tab
 ```
 
 ---

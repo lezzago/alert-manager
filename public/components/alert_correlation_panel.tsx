@@ -24,6 +24,7 @@ import {
   EuiPanel,
   EuiIcon,
   EuiToolTip,
+  EuiLink,
 } from '@elastic/eui';
 import type {
   AlertCorrelationResult,
@@ -34,17 +35,20 @@ import type {
   UnifiedAlertSummary,
 } from '../../common/types';
 import type { AlarmsApiClient } from '../services/alarms_client';
+import type { NavigationService } from '../services/navigation_service';
 
 type SubTabId = 'traces' | 'logs' | 'metrics';
 
 export interface AlertCorrelationPanelProps {
   alert: UnifiedAlertSummary;
   apiClient: AlarmsApiClient;
+  navigationService?: NavigationService;
 }
 
 export const AlertCorrelationPanel: React.FC<AlertCorrelationPanelProps> = ({
   alert,
   apiClient,
+  navigationService,
 }) => {
   const [activeTab, setActiveTab] = useState<SubTabId>('traces');
   const [loading, setLoading] = useState(true);
@@ -150,8 +154,16 @@ export const AlertCorrelationPanel: React.FC<AlertCorrelationPanelProps> = ({
 
       <EuiSpacer size="m" />
 
-      {activeTab === 'traces' && <TracesSubTab traces={data?.traces ?? []} />}
-      {activeTab === 'logs' && <LogsSubTab logs={data?.logs ?? []} />}
+      {activeTab === 'traces' && (
+        <TracesSubTab traces={data?.traces ?? []} navigationService={navigationService} />
+      )}
+      {activeTab === 'logs' && (
+        <LogsSubTab
+          logs={data?.logs ?? []}
+          navigationService={navigationService}
+          serviceName={alert.labels?.service}
+        />
+      )}
       {activeTab === 'metrics' && <MetricsSubTab metrics={data?.metrics ?? []} />}
     </div>
   );
@@ -161,7 +173,10 @@ export const AlertCorrelationPanel: React.FC<AlertCorrelationPanelProps> = ({
 // Sub-tab Components
 // ============================================================================
 
-const TracesSubTab: React.FC<{ traces: CorrelatedTrace[] }> = ({ traces }) => {
+const TracesSubTab: React.FC<{
+  traces: CorrelatedTrace[];
+  navigationService?: NavigationService;
+}> = ({ traces, navigationService }) => {
   if (traces.length === 0) {
     return (
       <EuiEmptyPrompt
@@ -230,9 +245,14 @@ const TracesSubTab: React.FC<{ traces: CorrelatedTrace[] }> = ({ traces }) => {
       width: '15%',
       truncateText: true,
       render: (id: string) => (
-        <EuiText size="xs" style={{ fontFamily: 'monospace' }}>
+        <EuiLink
+          onClick={() => navigationService?.navigateToTrace(id)}
+          data-test-subj={`trace-link-${id.substring(0, 12)}`}
+          style={{ fontFamily: 'monospace', fontSize: 12 }}
+          disabled={!navigationService?.isAvailable}
+        >
           {id.substring(0, 12)}...
-        </EuiText>
+        </EuiLink>
       ),
     },
   ];
@@ -247,7 +267,11 @@ const TracesSubTab: React.FC<{ traces: CorrelatedTrace[] }> = ({ traces }) => {
   );
 };
 
-const LogsSubTab: React.FC<{ logs: CorrelatedLog[] }> = ({ logs }) => {
+const LogsSubTab: React.FC<{
+  logs: CorrelatedLog[];
+  navigationService?: NavigationService;
+  serviceName?: string;
+}> = ({ logs, navigationService, serviceName }) => {
   if (logs.length === 0) {
     return (
       <EuiEmptyPrompt
@@ -305,9 +329,14 @@ const LogsSubTab: React.FC<{ logs: CorrelatedLog[] }> = ({ logs }) => {
       width: '15%',
       render: (id: string | undefined) =>
         id ? (
-          <EuiText size="xs" style={{ fontFamily: 'monospace' }}>
+          <EuiLink
+            onClick={() => navigationService?.navigateToTrace(id)}
+            data-test-subj={`log-trace-link-${id.substring(0, 12)}`}
+            style={{ fontFamily: 'monospace', fontSize: 12 }}
+            disabled={!navigationService?.isAvailable}
+          >
             {id.substring(0, 12)}...
-          </EuiText>
+          </EuiLink>
         ) : (
           <EuiText size="xs" color="subdued">
             --
@@ -317,12 +346,26 @@ const LogsSubTab: React.FC<{ logs: CorrelatedLog[] }> = ({ logs }) => {
   ];
 
   return (
-    <EuiBasicTable
-      items={logs}
-      columns={columns}
-      data-test-subj="correlationLogsTable"
-      compressed
-    />
+    <>
+      <EuiBasicTable
+        items={logs}
+        columns={columns}
+        data-test-subj="correlationLogsTable"
+        compressed
+      />
+      {serviceName && (
+        <>
+          <EuiSpacer size="s" />
+          <EuiLink
+            onClick={() => navigationService?.navigateToLogs(serviceName)}
+            data-test-subj="viewAllLogsLink"
+            disabled={!navigationService?.isAvailable}
+          >
+            View all logs for {serviceName} in Log Explorer
+          </EuiLink>
+        </>
+      )}
+    </>
   );
 };
 

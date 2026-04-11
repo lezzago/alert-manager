@@ -16,6 +16,7 @@ import { NavigationPublicPluginStart } from '../../../../src/plugins/navigation/
 import { PLUGIN_ID } from '../../common';
 import { AlarmsPage } from './alarms_page';
 import { AlarmsApiClient } from '../services/alarms_client';
+import { NavigationService } from '../services/navigation_service';
 import { AlertManagerErrorBoundary } from './error_boundary';
 
 interface AlarmsAppDeps {
@@ -23,6 +24,7 @@ interface AlarmsAppDeps {
   notifications: CoreStart['notifications'];
   http: CoreStart['http'];
   navigation: NavigationPublicPluginStart;
+  application?: CoreStart['application'];
 }
 
 /** Adapt OSD's HttpServiceBase to the HttpClient interface AlarmsPage expects */
@@ -38,8 +40,15 @@ function createOsdHttpClient(http: CoreStart['http']) {
   };
 }
 
-export const AlarmsApp = ({ basename, notifications, http, navigation }: AlarmsAppDeps) => {
+export const AlarmsApp = ({
+  basename,
+  notifications,
+  http,
+  navigation,
+  application,
+}: AlarmsAppDeps) => {
   const apiClient = new AlarmsApiClient(createOsdHttpClient(http));
+  const navigationService = new NavigationService(application, 'osd');
 
   return (
     <Router basename={basename}>
@@ -53,7 +62,7 @@ export const AlarmsApp = ({ basename, notifications, http, navigation }: AlarmsA
                 useDefaultBehaviors={true}
               />
             )}
-            <AlarmsPage apiClient={apiClient} />
+            <AlarmsPage apiClient={apiClient} navigationService={navigationService} />
           </>
         </AlertManagerErrorBoundary>
       </I18nProvider>

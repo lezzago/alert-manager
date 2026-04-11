@@ -19,6 +19,7 @@ import { OuiContext } from '@opensearch-project/oui/lib/components/context';
 
 import { AlarmsPage, AlarmsApiClient, HttpClient } from './components/alarms_page';
 import { AlertManagerErrorBoundary } from './components/error_boundary';
+import { NavigationService } from '../public/services/navigation_service';
 
 /** Simple fetch-based HTTP client for standalone mode */
 const standaloneHttp: HttpClient = {
@@ -65,12 +66,13 @@ const standaloneHttp: HttpClient = {
 };
 
 const apiClient = new AlarmsApiClient(standaloneHttp, 'standalone');
+const navigationService = new NavigationService(undefined, 'standalone');
 
 const App = () => (
   <OuiContext>
     <Router>
       <AlertManagerErrorBoundary>
-        <AlarmsPage apiClient={apiClient} />
+        <AlarmsPage apiClient={apiClient} navigationService={navigationService} />
       </AlertManagerErrorBoundary>
     </Router>
   </OuiContext>

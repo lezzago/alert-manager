@@ -26,11 +26,13 @@ import type { EnrichedOtelService } from '../../common/types';
 import type { SloInput } from '../../common/slo_types';
 import type { SloSuggestion } from '../../common/slo_suggestion_types';
 import type { AlarmsApiClient } from '../services/alarms_client';
+import type { NavigationService } from '../services/navigation_service';
 
 interface ServiceDetailFlyoutProps {
   service: EnrichedOtelService;
   onClose: () => void;
   apiClient: AlarmsApiClient;
+  navigationService?: NavigationService;
   onCreateSlo?: (prefill: SloInput) => void;
 }
 
@@ -56,6 +58,7 @@ export const ServiceDetailFlyout: React.FC<ServiceDetailFlyoutProps> = ({
   service,
   onClose,
   apiClient,
+  navigationService,
   onCreateSlo,
 }) => {
   const [suggestions, setSuggestions] = useState<SloSuggestion[]>([]);
@@ -286,7 +289,7 @@ export const ServiceDetailFlyout: React.FC<ServiceDetailFlyoutProps> = ({
               iconType="popout"
               data-test-subj="service-view-in-apm"
               onClick={() => {
-                // Deep link to APM service details will be added in Phase 4
+                navigationService?.navigateToApmService(service.name);
                 onClose();
               }}
             >

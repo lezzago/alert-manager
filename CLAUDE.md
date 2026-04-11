@@ -135,6 +135,13 @@ yarn start --config config/opensearch_dashboards.dev.yml
 - `AlertCorrelationPanel` in alert detail flyout with Traces/Logs/Metrics sub-tabs
 - 1 API route: POST correlations (accepts alert summary, returns correlated signals)
 
+**Deep links**: Bidirectional navigation between Alert Manager and APM/Traces/Logs:
+- Hash-based URL routing (`#/alerts`, `#/services/{name}`, etc.) via `useHashRouting` hook
+- `NavigationService` wraps OSD's `navigateToApp()` for SPA navigation, `window.open()` fallback for standalone
+- `core.application` threaded from plugin mount → `app.tsx` → `AlarmsPage` → child components
+- Service health API (`GET /services/{name}/health`) enables APM to query Alert Manager data for a service
+- Deep link URL builders in `common/deep_links.ts` produce URLs for APM service details, trace explorer, log explorer
+
 **Prometheus metadata**: `PrometheusMetadataProvider` interface (`common/types.ts`) for metric/label discovery:
 - Implemented by `DirectQueryPrometheusBackend` (live) and `MockBackend` (MOCK_MODE)
 - Wrapped by `PrometheusMetadataService` (`common/prometheus_metadata_service.ts`) with stale-while-revalidate caching
@@ -182,6 +189,10 @@ yarn start --config config/opensearch_dashboards.dev.yml
 | **Correlation Provider** | `common/opensearch_correlation_provider.ts` | Live DSL queries against `ss4o_traces-*-*` and `ss4o_logs-*-*` |
 | **Correlation Handlers** | `server/routes/correlation_handlers.ts` | Framework-agnostic handler for correlation API |
 | **Correlation Panel** | `public/components/alert_correlation_panel.tsx` | Traces/Logs/Metrics sub-tabs in alert detail flyout |
+| **Deep Link URLs** | `common/deep_links.ts` | Hash route builders, APM/Trace/Log explorer URL builders |
+| **Hash Routing Hook** | `public/hooks/use_hash_routing.ts` | Bidirectional URL hash ↔ component state sync |
+| **Navigation Service** | `public/services/navigation_service.ts` | Cross-app navigation via OSD `navigateToApp()` + standalone fallback |
+| **Service Health Handler** | `server/routes/service_health_handlers.ts` | APM integration API: alerts + SLOs for a service |
 | **Build Script** | `build.sh` | Thin wrapper around `yarn plugin-helpers build` |
 
 ## Testing
@@ -192,13 +203,13 @@ Two projects in `jest.config.js`:
 - `server` -- Node environment, tests in `common/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
-Current: **42 test files, 1007 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
+Current: **45 test files, 1045 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
 
 OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new OUI components to production code, check if a mock exists -- components needing interaction in tests (click handlers, selectable props, role attributes) require explicit mocks.
 
 ### E2E Tests (Cypress)
 
-11 spec files in `cypress/e2e/` with **101 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8). Two modes:
+12 spec files in `cypress/e2e/` with **113 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8, deep links 12). Two modes:
 
 **Standalone mode** (default, fast, no Docker needed):
 ```bash

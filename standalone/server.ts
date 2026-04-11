@@ -84,6 +84,7 @@ import { SloService } from '../common/slo_service';
 import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
 import { OtelServiceDiscoveryService } from '../common/otel_service_discovery';
 import { handleListServices, handleGetService } from '../server/routes/service_handlers';
+import { handleServiceHealth } from '../server/routes/service_health_handlers';
 import type { PrometheusMetadataProvider } from '../common/types';
 import { MockOtelProvider, MockCorrelationProvider } from '../common/testing';
 import { SloSuggestionEngine } from '../common/slo_suggestion_engine';
@@ -429,6 +430,14 @@ app.get('/api/services/:name/slo-suggestions', async (req, res) => {
     dsId,
     logger
   );
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/services/:name/health', async (req, res) => {
+  if (!otelService) {
+    return res.status(404).json({ error: 'Service discovery not available' });
+  }
+  const r = await handleServiceHealth(req.params.name, otelService, sloService, logger);
   res.status(r.status).json(r.body);
 });
 

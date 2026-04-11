@@ -32,6 +32,8 @@ import { CreateMetricsMonitor, MetricsMonitorFormState } from './create_metrics_
 import SloListing from './slo_listing';
 import { ServicesTab } from './services_tab';
 import { AlarmsApiClient, HttpClient } from '../services/alarms_client';
+import { NavigationService } from '../services/navigation_service';
+import { useHashRouting } from '../hooks/use_hash_routing';
 
 // Re-export for components that import from this file
 export { AlarmsApiClient, HttpClient };
@@ -42,6 +44,7 @@ export { AlarmsApiClient, HttpClient };
 
 interface AlarmsPageProps {
   apiClient: AlarmsApiClient;
+  navigationService?: NavigationService;
 }
 
 type TabId = 'alerts' | 'rules' | 'routing' | 'suppression' | 'slos' | 'services';
@@ -51,8 +54,10 @@ type TabId = 'alerts' | 'rules' | 'routing' | 'suppression' | 'slos' | 'services
 // page-size controls (10/20/50/100 rows per page) over this full dataset.
 const DEFAULT_PAGE_SIZE = 1000;
 
-export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
-  const [activeTab, setActiveTab] = useState<TabId>('alerts');
+export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient, navigationService }) => {
+  const [routeState, routeActions] = useHashRouting();
+  const activeTab = routeState.tab as TabId;
+  const setActiveTab = routeActions.setTab;
   const [datasources, setDatasources] = useState<Datasource[]>([]);
   const [workspaceOptions, setWorkspaceOptions] = useState<Datasource[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
@@ -77,10 +82,46 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
   const [createMonitorType, setCreateMonitorType] = useState<
     'logs' | 'prometheus' | 'metrics' | null
   >(null);
-  const [selectedAlert, setSelectedAlert] = useState<UnifiedAlert | null>(null);
+  const [selectedAlert, setSelectedAlertRaw] = useState<UnifiedAlert | null>(null);
   const [toasts, setToasts] = useState<
     Array<{ id: string; title: string; color: string; text?: string }>
   >([]);
+
+  // Sync alert selection with hash routing
+  const setSelectedAlert = useCallback(
+    (alert: UnifiedAlert | null | ((prev: UnifiedAlert | null) => UnifiedAlert | null)) => {
+      if (typeof alert === 'function') {
+        setSelectedAlertRaw(alert);
+      } else if (alert) {
+        routeActions.openAlert(alert.datasourceId, alert.id);
+        setSelectedAlertRaw(alert);
+      } else {
+        routeActions.closeAlert();
+        setSelectedAlertRaw(null);
+      }
+    },
+    [routeActions]
+  );
+
+  // Restore alert detail from hash on mount or back/forward navigation
+  useEffect(() => {
+    if (routeState.alertDetail && !selectedAlert) {
+      const { datasourceId, alertId } = routeState.alertDetail;
+      apiClient
+        .getAlertDetail(datasourceId, alertId)
+        .then((data: UnifiedAlert) => {
+          if (data) setSelectedAlertRaw(data);
+        })
+        .catch(() => {
+          // Alert not found — clear the hash
+          routeActions.closeAlert();
+        });
+    } else if (!routeState.alertDetail && selectedAlert) {
+      setSelectedAlertRaw(null);
+    }
+    // Only react to routeState changes, not selectedAlert
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeState.alertDetail, apiClient, routeActions]);
 
   const addToast = (
     title: string,
@@ -827,10 +868,26 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
       return <SuppressionRulesPanel apiClient={apiClient} />;
     }
     if (activeTab === 'slos') {
-      return <SloListing apiClient={apiClient} />;
+      return (
+        <SloListing
+          apiClient={apiClient}
+          navigationService={navigationService}
+          initialSloId={routeState.sloId ?? undefined}
+          onSloSelect={routeActions.openSlo}
+          onSloClose={routeActions.closeSlo}
+        />
+      );
     }
     if (activeTab === 'services') {
-      return <ServicesTab apiClient={apiClient} />;
+      return (
+        <ServicesTab
+          apiClient={apiClient}
+          navigationService={navigationService}
+          initialServiceName={routeState.serviceName ?? undefined}
+          onServiceSelect={routeActions.openService}
+          onServiceClose={routeActions.closeService}
+        />
+      );
     }
     return null;
   };
@@ -920,6 +977,7 @@ export const AlarmsPage: React.FC<AlarmsPageProps> = ({ apiClient }) => {
             alert={selectedAlert}
             datasources={datasources}
             apiClient={apiClient}
+            navigationService={navigationService}
             onClose={() => setSelectedAlert(null)}
             onAcknowledge={(id) => {
               handleAcknowledgeAlert(id);

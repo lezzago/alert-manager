@@ -86,6 +86,13 @@ export interface SloApiClient {
 
 interface SloListingProps {
   apiClient: SloApiClient;
+  navigationService?: unknown; // NavigationService — typed as unknown to avoid circular import
+  /** SLO ID from URL hash to auto-open detail flyout. */
+  initialSloId?: string;
+  /** Callback when an SLO is selected (updates URL hash). */
+  onSloSelect?: (sloId: string) => void;
+  /** Callback when SLO detail is closed (clears URL hash). */
+  onSloClose?: () => void;
 }
 
 interface SloApiResponse {
@@ -275,7 +282,12 @@ const ExpandedRuleRow: React.FC<{ sloId: string; apiClient: SloApiClient }> = ({
 // SloListing -- main component
 // ============================================================================
 
-const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
+const SloListing: React.FC<SloListingProps> = ({
+  apiClient,
+  initialSloId,
+  onSloSelect,
+  onSloClose,
+}) => {
   // State
   const [slos, setSlos] = useState<SloSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -317,6 +329,15 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
   useEffect(() => {
     fetchSlos();
   }, [fetchSlos]);
+
+  // Restore selected SLO from URL hash on mount
+  useEffect(() => {
+    if (initialSloId && !selectedSloId) {
+      setSelectedSloId(initialSloId);
+    }
+    // Only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSloId]);
 
   // Derived filter values
   const allServices = useMemo(() => [...new Set(slos.map((s) => s.serviceName))].sort(), [slos]);
@@ -473,11 +494,15 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
               textOverflow: 'ellipsis',
               display: 'block',
             }}
-            onClick={() => setSelectedSloId(slo.id)}
+            onClick={() => {
+              setSelectedSloId(slo.id);
+              onSloSelect?.(slo.id);
+            }}
             onKeyDown={(e: React.KeyboardEvent) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 setSelectedSloId(slo.id);
+                onSloSelect?.(slo.id);
               }
             }}
             aria-label={`View details for ${name}`}
@@ -998,11 +1023,15 @@ const SloListing: React.FC<SloListingProps> = ({ apiClient }) => {
       {selectedSloId && (
         <SloDetailFlyout
           slo={slos.find((s) => s.id === selectedSloId) || null}
-          onClose={() => setSelectedSloId(null)}
+          onClose={() => {
+            setSelectedSloId(null);
+            onSloClose?.();
+          }}
           apiClient={apiClient}
           onDelete={(id) => {
             handleDelete(id);
             setSelectedSloId(null);
+            onSloClose?.();
           }}
         />
       )}

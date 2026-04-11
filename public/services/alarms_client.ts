@@ -152,6 +152,7 @@ interface ApiPaths {
   serviceBadges: string;
   serviceDetail: (name: string) => string;
   sloSuggestions: (serviceName: string) => string;
+  serviceHealth: (name: string) => string;
   apmConfig: string;
   correlations: string;
 }
@@ -182,6 +183,7 @@ const OSD_PATHS: ApiPaths = {
   serviceBadges: '/api/alerting/services/badges',
   serviceDetail: (name) => `/api/alerting/services/${encodeURIComponent(name)}`,
   sloSuggestions: (name) => `/api/alerting/services/${encodeURIComponent(name)}/slo-suggestions`,
+  serviceHealth: (name) => `/api/alerting/services/${encodeURIComponent(name)}/health`,
   apmConfig: '/api/alerting/apm-config',
   correlations: '/api/alerting/correlations',
 };
@@ -211,6 +213,7 @@ const STANDALONE_PATHS: ApiPaths = {
   serviceBadges: '/api/services/badges',
   serviceDetail: (name) => `/api/services/${encodeURIComponent(name)}`,
   sloSuggestions: (name) => `/api/services/${encodeURIComponent(name)}/slo-suggestions`,
+  serviceHealth: (name) => `/api/services/${encodeURIComponent(name)}/health`,
   apmConfig: '/api/apm-config',
   correlations: '/api/correlations',
 };
@@ -531,6 +534,26 @@ export class AlarmsApiClient {
     } catch {
       return emptyResult;
     }
+  }
+
+  // ---- Service Health (APM integration) ------------------------------------
+
+  async getServiceHealth(serviceName: string): Promise<{
+    serviceName: string;
+    activeAlertCount: number;
+    severityBreakdown: Record<string, number>;
+    slos: Array<{
+      id: string;
+      name: string;
+      attainment: number;
+      target: number;
+      errorBudgetRemaining: number;
+      status: string;
+    }>;
+    hasSlos: boolean;
+    alertManagerUrl: string;
+  }> {
+    return this.cachedGet(this.paths.serviceHealth(serviceName));
   }
 
   // ---- Cache management ---------------------------------------------------

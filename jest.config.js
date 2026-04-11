@@ -27,7 +27,7 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'jsdom',
       roots: ['<rootDir>/public'],
-      testMatch: ['**/__tests__/**/*.test.tsx'],
+      testMatch: ['**/__tests__/**/*.test.tsx', '**/__tests__/**/*.test.ts'],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
       transform: {
         '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.test.json', diagnostics: false }],

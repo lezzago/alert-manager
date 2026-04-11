@@ -20,7 +20,10 @@ import {
 } from '@elastic/eui';
 import type { AlarmsApiClient } from '../services/alarms_client';
 import type { EnrichedOtelService } from '../../common/types';
+import type { SloInput } from '../../common/slo_types';
+import type { SuggestionBadgeData } from '../../common/slo_suggestion_types';
 import { ServiceDetailFlyout } from './service_detail_flyout';
+import { CreateSloWizard } from './create_slo_wizard';
 
 interface ServicesTabProps {
   apiClient: AlarmsApiClient;
@@ -47,6 +50,8 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState<keyof EnrichedOtelService>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [badges, setBadges] = useState<Record<string, SuggestionBadgeData>>({});
+  const [wizardPrefill, setWizardPrefill] = useState<SloInput | null>(null);
 
   const fetchServices = useCallback(async () => {
     setLoading(true);
@@ -61,9 +66,19 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
     }
   }, [apiClient]);
 
+  const fetchBadges = useCallback(async () => {
+    try {
+      const data = await apiClient.getServiceBadges();
+      setBadges(data);
+    } catch {
+      // Graceful degradation — badges are optional
+    }
+  }, [apiClient]);
+
   useEffect(() => {
     fetchServices();
-  }, [fetchServices]);
+    fetchBadges();
+  }, [fetchServices, fetchBadges]);
 
   const filtered = useMemo(() => {
     let result = services;
@@ -146,6 +161,30 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
         ),
       },
       {
+        field: 'name',
+        name: 'SLO Coverage',
+        width: '170px',
+        render: (name: string) => {
+          const badge = badges[name];
+          if (!badge || badge.totalSuggested === 0) {
+            return (
+              <EuiText size="s" color="subdued">
+                --
+              </EuiText>
+            );
+          }
+          const allCreated = badge.alreadyCreated >= badge.totalSuggested;
+          return (
+            <EuiBadge
+              color={allCreated ? 'success' : 'warning'}
+              data-test-subj={`service-slo-coverage-${name}`}
+            >
+              {badge.alreadyCreated} of {badge.totalSuggested} suggested
+            </EuiBadge>
+          );
+        },
+      },
+      {
         field: 'activeAlertCount',
         name: 'Alerts',
         sortable: true,
@@ -221,7 +260,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
         render: (deps: string[]) => <EuiText size="s">{deps.length}</EuiText>,
       },
     ],
-    []
+    [badges]
   );
 
   if (loading) {
@@ -326,7 +365,30 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ apiClient }) => {
 
       {/* Detail Flyout */}
       {selectedService && (
-        <ServiceDetailFlyout service={selectedService} onClose={() => setSelectedService(null)} />
+        <ServiceDetailFlyout
+          service={selectedService}
+          onClose={() => setSelectedService(null)}
+          apiClient={apiClient}
+          onCreateSlo={(prefill) => {
+            setSelectedService(null);
+            setWizardPrefill(prefill);
+          }}
+        />
+      )}
+
+      {/* SLO Creation Wizard (from suggestion) */}
+      {wizardPrefill && (
+        <CreateSloWizard
+          datasourceId={wizardPrefill.datasourceId}
+          onClose={() => setWizardPrefill(null)}
+          onCreated={() => {
+            setWizardPrefill(null);
+            fetchServices();
+            fetchBadges();
+          }}
+          apiClient={apiClient}
+          prefill={wizardPrefill}
+        />
       )}
     </>
   );

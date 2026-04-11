@@ -62,6 +62,8 @@ import type { OtelServiceDiscoveryService } from '../../common/otel_service_disc
 import type { ApmConfigReader, SavedObjectsRepository } from '../../common/apm_config_reader';
 import { handleGetAlertmanagerConfig } from './alertmanager_handlers';
 import { handleListServices, handleGetService, handleGetApmConfig } from './service_handlers';
+import { handleGetSloSuggestions, handleGetServiceBadges } from './suggestion_handlers';
+import type { SloSuggestionEngine } from '../../common/slo_suggestion_engine';
 
 export function defineRoutes(
   router: IRouter,
@@ -73,7 +75,8 @@ export function defineRoutes(
   metadataService?: PrometheusMetadataService,
   otelService?: OtelServiceDiscoveryService,
   apmConfigReader?: ApmConfigReader,
-  getApmRepository?: () => SavedObjectsRepository | undefined
+  getApmRepository?: () => SavedObjectsRepository | undefined,
+  suggestionEngine?: SloSuggestionEngine
 ) {
   // Datasource routes
   router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
@@ -782,6 +785,23 @@ export function defineRoutes(
       return res.ok({ body: result.body });
     });
 
+    // Badge route MUST come before {name} to avoid path shadowing
+    if (suggestionEngine) {
+      router.get(
+        {
+          path: '/api/alerting/services/badges',
+          validate: {
+            query: schema.object({ dsId: schema.maybe(schema.string()) }),
+          },
+        },
+        async (_ctx, req, res) => {
+          const dsId = (req.query as { dsId?: string }).dsId || 'ds-2';
+          const result = await handleGetServiceBadges(suggestionEngine, otelService, dsId, logger);
+          return res.ok({ body: result.body });
+        }
+      );
+    }
+
     router.get(
       {
         path: '/api/alerting/services/{name}',
@@ -797,6 +817,30 @@ export function defineRoutes(
         });
       }
     );
+
+    // SLO suggestions for a specific service
+    if (suggestionEngine) {
+      router.get(
+        {
+          path: '/api/alerting/services/{serviceName}/slo-suggestions',
+          validate: {
+            params: schema.object({ serviceName: schema.string() }),
+            query: schema.object({ dsId: schema.maybe(schema.string()) }),
+          },
+        },
+        async (_ctx, req, res) => {
+          const dsId = (req.query as { dsId?: string }).dsId || 'ds-2';
+          const result = await handleGetSloSuggestions(
+            suggestionEngine,
+            otelService,
+            req.params.serviceName,
+            dsId,
+            logger
+          );
+          return res.ok({ body: result.body });
+        }
+      );
+    }
   }
 
   if (apmConfigReader) {

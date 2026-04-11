@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   EuiFlyout,
   EuiFlyoutHeader,
@@ -20,12 +20,18 @@ import {
   EuiButtonEmpty,
   EuiButton,
   EuiEmptyPrompt,
+  EuiLoadingSpinner,
 } from '@elastic/eui';
 import type { EnrichedOtelService } from '../../common/types';
+import type { SloInput } from '../../common/slo_types';
+import type { SloSuggestion } from '../../common/slo_suggestion_types';
+import type { AlarmsApiClient } from '../services/alarms_client';
 
 interface ServiceDetailFlyoutProps {
   service: EnrichedOtelService;
   onClose: () => void;
+  apiClient: AlarmsApiClient;
+  onCreateSlo?: (prefill: SloInput) => void;
 }
 
 const signalBadge = (label: string, active: boolean) => (
@@ -40,7 +46,30 @@ const severityColor = (count: number): string => {
   return '#BD271E';
 };
 
-export const ServiceDetailFlyout: React.FC<ServiceDetailFlyoutProps> = ({ service, onClose }) => {
+const confidenceColor = (confidence: string): string => {
+  if (confidence === 'high') return 'success';
+  if (confidence === 'medium') return 'warning';
+  return 'default';
+};
+
+export const ServiceDetailFlyout: React.FC<ServiceDetailFlyoutProps> = ({
+  service,
+  onClose,
+  apiClient,
+  onCreateSlo,
+}) => {
+  const [suggestions, setSuggestions] = useState<SloSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(true);
+
+  useEffect(() => {
+    setSuggestionsLoading(true);
+    apiClient
+      .getSloSuggestions(service.name)
+      .then((resp) => setSuggestions(resp.suggestions))
+      .catch(() => setSuggestions([]))
+      .finally(() => setSuggestionsLoading(false));
+  }, [apiClient, service.name]);
+
   const detailItems = [
     { title: 'Environment', description: service.environment },
     { title: 'Type', description: service.type ?? 'Service' },
@@ -156,7 +185,7 @@ export const ServiceDetailFlyout: React.FC<ServiceDetailFlyoutProps> = ({ servic
 
         <EuiSpacer size="m" />
 
-        {/* SLO Status */}
+        {/* SLO Coverage */}
         <EuiPanel paddingSize="m" hasBorder>
           <EuiText size="xs" color="subdued">
             <strong>SLO Coverage</strong>
@@ -173,6 +202,75 @@ export const ServiceDetailFlyout: React.FC<ServiceDetailFlyoutProps> = ({ servic
               title={<h3>No SLOs configured</h3>}
               body={<p>Create an SLO to start tracking reliability for this service.</p>}
             />
+          )}
+        </EuiPanel>
+
+        <EuiSpacer size="m" />
+
+        {/* Suggested SLOs */}
+        <EuiPanel paddingSize="m" hasBorder data-test-subj="suggested-slos-panel">
+          <EuiText size="xs" color="subdued">
+            <strong>Suggested SLOs</strong>
+          </EuiText>
+          <EuiSpacer size="s" />
+          {suggestionsLoading ? (
+            <EuiFlexGroup justifyContent="center">
+              <EuiFlexItem grow={false}>
+                <EuiLoadingSpinner size="m" data-test-subj="suggestions-loading" />
+              </EuiFlexItem>
+            </EuiFlexGroup>
+          ) : suggestions.length === 0 ? (
+            <EuiText size="s" color="subdued" data-test-subj="no-suggestions">
+              No suggestions available for this service.
+            </EuiText>
+          ) : (
+            suggestions.map((s) => (
+              <EuiPanel
+                key={s.templateId}
+                paddingSize="s"
+                hasBorder
+                color={s.alreadyCovered ? 'subdued' : 'plain'}
+                style={{ marginBottom: 4, opacity: s.alreadyCovered ? 0.6 : 1 }}
+                data-test-subj={`suggestion-card-${s.templateId}`}
+              >
+                <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
+                  <EuiFlexItem>
+                    <EuiText size="s">
+                      <strong>{s.templateName}</strong>
+                    </EuiText>
+                    <EuiText size="xs" color="subdued">
+                      {s.reason}
+                    </EuiText>
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiBadge
+                      color={confidenceColor(s.confidence)}
+                      data-test-subj={`suggestion-confidence-${s.templateId}`}
+                    >
+                      {s.confidence}
+                    </EuiBadge>
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    {s.alreadyCovered ? (
+                      <EuiBadge
+                        color="hollow"
+                        data-test-subj={`suggestion-created-${s.templateId}`}
+                      >
+                        Created
+                      </EuiBadge>
+                    ) : (
+                      <EuiButton
+                        size="s"
+                        onClick={() => onCreateSlo?.(s.prefilled)}
+                        data-test-subj={`suggestion-create-${s.templateId}`}
+                      >
+                        Create
+                      </EuiButton>
+                    )}
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+              </EuiPanel>
+            ))
           )}
         </EuiPanel>
       </EuiFlyoutBody>

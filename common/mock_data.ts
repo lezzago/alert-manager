@@ -56,6 +56,14 @@ export const MOCK_METRICS: readonly string[] = [
   'container_cpu_usage_seconds_total',
   'container_memory_usage_bytes',
   'container_network_receive_bytes_total',
+  // OTEL span-derived metrics (Data Prepper)
+  'request',
+  'latency_seconds_bucket',
+  'latency_seconds_count',
+  'latency_seconds_sum',
+  // gRPC metrics
+  'grpc_server_handled_total',
+  'grpc_server_handling_seconds_bucket',
 ] as const;
 
 export const MOCK_LABEL_NAMES: readonly string[] = [
@@ -89,6 +97,8 @@ export const MOCK_LABEL_NAMES: readonly string[] = [
   'grpc_method',
   'endpoint',
   'peer_service',
+  'remoteService',
+  'fault',
 ] as const;
 
 export const MOCK_LABEL_VALUES: Readonly<Record<string, readonly string[]>> = {
@@ -97,10 +107,22 @@ export const MOCK_LABEL_VALUES: Readonly<Record<string, readonly string[]>> = {
   mode: ['idle', 'user', 'system', 'iowait', 'nice', 'irq', 'softirq', 'steal'],
   severity: ['critical', 'warning', 'info'],
   team: ['infra', 'platform', 'sre', 'security', 'data', 'network'],
-  service: ['node-exporter', 'api-gateway', 'kubernetes', 'postgres', 'blackbox-exporter'],
+  service: [
+    'node-exporter',
+    'api-gateway',
+    'kubernetes',
+    'postgres',
+    'blackbox-exporter',
+    'payment-service',
+    'order-service',
+    'checkout-service',
+    'notification-service',
+    'user-auth',
+    'pet-clinic-frontend',
+  ],
   environment: ['production', 'staging', 'development'],
   region: ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'],
-  namespace: ['production', 'staging', 'kube-system', 'monitoring'],
+  namespace: ['production', 'staging', 'kube-system', 'monitoring', 'span_derived', 'default'],
   method: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   status: ['200', '201', '301', '400', '401', '403', '404', '500', '502', '503'],
   application: ['checkout', 'platform', 'user-service', 'order-service', 'observability'],
@@ -133,4 +155,12 @@ export const MOCK_LABEL_VALUES: Readonly<Record<string, readonly string[]>> = {
   grpc_method: ['GetUser', 'CreateOrder', 'ProcessPayment', 'CheckInventory', 'ListItems'],
   endpoint: ['/', '/api/health', '/api/users', '/api/orders', '/api/payments', '/api/inventory'],
   peer_service: ['payment-api', 'order-api', 'user-api', 'inventory-api', 'notification-api'],
+  remoteService: [
+    'payment-service',
+    'order-service',
+    'postgres',
+    'notification-service',
+    'user-auth',
+  ],
+  fault: ['0', '1'],
 } as const;

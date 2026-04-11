@@ -26,6 +26,10 @@ import type {
   ApmDatasetConfig,
 } from '../../common/types';
 import type { SloDefinition, SloInput, SloSummary } from '../../common/slo_types';
+import type {
+  SloSuggestionsResponse,
+  SuggestionBadgeData,
+} from '../../common/slo_suggestion_types';
 
 // ---------------------------------------------------------------------------
 // HttpClient interface — implemented by OSD's http service adapter or fetch()
@@ -144,7 +148,9 @@ interface ApiPaths {
   labelValues: (dsId: string, label: string) => string;
   metricMetadata: (dsId: string) => string;
   services: string;
+  serviceBadges: string;
   serviceDetail: (name: string) => string;
+  sloSuggestions: (serviceName: string) => string;
   apmConfig: string;
 }
 
@@ -171,7 +177,9 @@ const OSD_PATHS: ApiPaths = {
   metricMetadata: (dsId) =>
     `/api/alerting/prometheus/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
   services: '/api/alerting/services',
+  serviceBadges: '/api/alerting/services/badges',
   serviceDetail: (name) => `/api/alerting/services/${encodeURIComponent(name)}`,
+  sloSuggestions: (name) => `/api/alerting/services/${encodeURIComponent(name)}/slo-suggestions`,
   apmConfig: '/api/alerting/apm-config',
 };
 
@@ -197,7 +205,9 @@ const STANDALONE_PATHS: ApiPaths = {
     )}`,
   metricMetadata: (dsId) => `/api/datasources/${encodeURIComponent(dsId)}/metadata/metric-metadata`,
   services: '/api/services',
+  serviceBadges: '/api/services/badges',
   serviceDetail: (name) => `/api/services/${encodeURIComponent(name)}`,
+  sloSuggestions: (name) => `/api/services/${encodeURIComponent(name)}/slo-suggestions`,
   apmConfig: '/api/apm-config',
 };
 
@@ -453,6 +463,30 @@ export class AlarmsApiClient {
       return await this.cachedGet(this.paths.apmConfig);
     } catch {
       return null;
+    }
+  }
+
+  // ---- SLO Suggestions ----------------------------------------------------
+
+  async getSloSuggestions(serviceName: string): Promise<SloSuggestionsResponse> {
+    try {
+      if (this.mode === 'osd') {
+        return await this.http.get<SloSuggestionsResponse>(this.paths.sloSuggestions(serviceName));
+      }
+      return await this.http.get<SloSuggestionsResponse>(this.paths.sloSuggestions(serviceName));
+    } catch {
+      return { service: serviceName, suggestions: [], existingSloIds: [] };
+    }
+  }
+
+  async getServiceBadges(): Promise<Record<string, SuggestionBadgeData>> {
+    try {
+      const res = await this.cachedGet<{ badges: Record<string, SuggestionBadgeData> }>(
+        this.paths.serviceBadges
+      );
+      return res.badges ?? {};
+    } catch {
+      return {};
     }
   }
 

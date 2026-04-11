@@ -16,8 +16,8 @@ import type { PrometheusMetricMetadata } from '../types';
 // ============================================================================
 
 describe('SLO_TEMPLATES', () => {
-  it('has exactly 5 entries', () => {
-    expect(SLO_TEMPLATES).toHaveLength(5);
+  it('has exactly 7 entries', () => {
+    expect(SLO_TEMPLATES).toHaveLength(7);
   });
 
   it('has the correct template ids', () => {
@@ -27,6 +27,8 @@ describe('SLO_TEMPLATES', () => {
       'http-latency-p99',
       'grpc-availability',
       'grpc-latency-p99',
+      'otel-span-availability',
+      'otel-span-latency-p99',
       'custom',
     ]);
   });
@@ -130,6 +132,24 @@ describe('detectMetricType — template matching', () => {
     const result = detectMetricType('unknown_metric');
     expect(result.suggestedTemplate).toBeNull();
   });
+
+  it('matches "request" to otel-span-availability template', () => {
+    const result = detectMetricType('request');
+    expect(result.suggestedTemplate).not.toBeNull();
+    expect(result.suggestedTemplate!.id).toBe('otel-span-availability');
+  });
+
+  it('matches latency_seconds_bucket to otel-span-latency-p99 template', () => {
+    const result = detectMetricType('latency_seconds_bucket');
+    expect(result.suggestedTemplate).not.toBeNull();
+    expect(result.suggestedTemplate!.id).toBe('otel-span-latency-p99');
+  });
+
+  it('matches latency_seconds_count to otel-span-latency-p99 template', () => {
+    const result = detectMetricType('latency_seconds_count');
+    expect(result.suggestedTemplate).not.toBeNull();
+    expect(result.suggestedTemplate!.id).toBe('otel-span-latency-p99');
+  });
 });
 
 // ============================================================================
@@ -137,8 +157,8 @@ describe('detectMetricType — template matching', () => {
 // ============================================================================
 
 describe('GOOD_EVENTS_FILTER_PRESETS', () => {
-  it('has exactly 5 entries', () => {
-    expect(GOOD_EVENTS_FILTER_PRESETS).toHaveLength(5);
+  it('has exactly 6 entries', () => {
+    expect(GOOD_EVENTS_FILTER_PRESETS).toHaveLength(6);
   });
 
   it('every preset has non-empty label and value', () => {

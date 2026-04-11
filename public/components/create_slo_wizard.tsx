@@ -12,7 +12,7 @@
  *
  * SLI form state is managed by `useReducer` in the extracted `SliSection`.
  */
-import React, { useState, useMemo, useCallback, useReducer } from 'react';
+import React, { useState, useMemo, useCallback, useReducer, useEffect } from 'react';
 import {
   EuiSpacer,
   EuiPanel,
@@ -63,6 +63,8 @@ interface CreateSloWizardProps {
     AlarmsApiClient,
     'createSlo' | 'getMetricNames' | 'getLabelNames' | 'getLabelValues' | 'getMetricMetadata'
   >;
+  /** Optional pre-filled SLO input from the suggestion engine. */
+  prefill?: SloInput;
 }
 
 // ============================================================================
@@ -397,6 +399,7 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
   onClose,
   onCreated,
   apiClient,
+  prefill,
 }) => {
   // SLI form state — managed by useReducer for atomic template application
   const [sliState, sliDispatch] = useReducer(sliFormReducer, initialSliState);
@@ -421,6 +424,72 @@ export const CreateSloWizard: React.FC<CreateSloWizardProps> = ({
 
   // Section 5: Tags
   const [tags, setTags] = useState<Array<{ key: string; value: string }>>([]);
+
+  // Apply pre-fill from suggestion engine (one-time on mount)
+  useEffect(() => {
+    if (!prefill) return;
+    // SLI fields
+    sliDispatch({ type: 'SET_FIELD', field: 'metric', value: prefill.sli.metric });
+    sliDispatch({ type: 'SET_SLI_TYPE', value: prefill.sli.type });
+    sliDispatch({ type: 'SET_FIELD', field: 'calcMethod', value: prefill.sli.calcMethod });
+    sliDispatch({ type: 'SET_SOURCE_TYPE', value: prefill.sli.sourceType });
+    sliDispatch({
+      type: 'SET_FIELD',
+      field: 'service',
+      value: prefill.sli.service.labelValue,
+    });
+    sliDispatch({
+      type: 'SET_FIELD',
+      field: 'serviceLabelName',
+      value: prefill.sli.service.labelName,
+    });
+    sliDispatch({
+      type: 'SET_FIELD',
+      field: 'operation',
+      value: prefill.sli.operation.labelValue,
+    });
+    sliDispatch({
+      type: 'SET_FIELD',
+      field: 'operationLabelName',
+      value: prefill.sli.operation.labelName,
+    });
+    if (prefill.sli.goodEventsFilter) {
+      sliDispatch({
+        type: 'SET_FIELD',
+        field: 'goodEventsFilter',
+        value: prefill.sli.goodEventsFilter,
+      });
+    }
+    if (prefill.sli.latencyThreshold !== undefined) {
+      sliDispatch({
+        type: 'SET_FIELD',
+        field: 'latencyThreshold',
+        value: String(prefill.sli.latencyThreshold),
+      });
+    }
+    if (prefill.sli.dependency) {
+      sliDispatch({
+        type: 'SET_FIELD',
+        field: 'dependency',
+        value: prefill.sli.dependency.labelValue,
+      });
+      sliDispatch({
+        type: 'SET_FIELD',
+        field: 'dependencyLabelName',
+        value: prefill.sli.dependency.labelName,
+      });
+    }
+    // SLO-level fields
+    setTarget(String(prefill.target * 100));
+    setBudgetWarningThreshold(String(prefill.budgetWarningThreshold * 100));
+    setWindowDuration(prefill.window.duration);
+    if (prefill.burnRates) setBurnRates([...prefill.burnRates]);
+    if (prefill.name) {
+      setSloName(prefill.name);
+      setAutoName(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Submission state
   const [hasSubmitted, setHasSubmitted] = useState(false);

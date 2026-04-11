@@ -28,6 +28,7 @@ import {
 } from '../common';
 import { MockOpenSearchBackend, MockPrometheusBackend, MockOtelProvider } from '../common/testing';
 import { PrometheusMetadataService } from '../common/prometheus_metadata_service';
+import { SloSuggestionEngine } from '../common/slo_suggestion_engine';
 import { SavedObjectSloStore } from './slo_saved_object_store';
 import { HttpClient } from '../common/http_client';
 import type { SavedObjectsRepository } from '../common/apm_config_reader';
@@ -312,6 +313,13 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       );
     }
 
+    // Create SLO suggestion engine if both metadata and SLO services are available.
+    let suggestionEngine: SloSuggestionEngine | undefined;
+    if (metadataService && sloService) {
+      suggestionEngine = new SloSuggestionEngine(metadataService, sloService, logger);
+      this.logger.info('alertManager: SloSuggestionEngine initialized');
+    }
+
     defineRoutes(
       router,
       datasourceService,
@@ -322,7 +330,8 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       metadataService,
       otelService,
       apmConfigReader,
-      () => this.apmRepository
+      () => this.apmRepository,
+      suggestionEngine
     );
 
     return {};

@@ -148,7 +148,10 @@ yarn start --config config/opensearch_dashboards.dev.yml
 | **SLO Types** | `common/slo_types.ts` | ISloStore, SloDefinition, SloInput, MWMBR tiers |
 | **SLO Service** | `common/slo_service.ts` | CRUD, status computation, store abstraction |
 | **SLO Rules** | `common/slo_promql_generator.ts` | Generates Prometheus recording + alerting rules |
-| **SLO Templates** | `common/slo_templates.ts` | Template definitions, `detectMetricType()`, error budget calc |
+| **SLO Templates** | `common/slo_templates.ts` | Template definitions (7 incl. OTEL), `detectMetricType()`, error budget calc |
+| **SLO Suggestion Types** | `common/slo_suggestion_types.ts` | SloSuggestion, SloSuggestionsResponse, SuggestionBadgeData |
+| **SLO Suggestion Engine** | `common/slo_suggestion_engine.ts` | Detection patterns, `getSuggestions()`, `getBadgeData()`, pre-fill builders |
+| **Suggestion Handlers** | `server/routes/suggestion_handlers.ts` | Framework-agnostic handlers for suggestion + badge API routes |
 | **Metadata Service** | `common/prometheus_metadata_service.ts` | Stale-while-revalidate caching for Prometheus metadata |
 | **DirectQuery Backend** | `common/directquery_prometheus_backend.ts` | Implements `PrometheusBackend` + `PrometheusMetadataProvider` |
 | **Mock Backend** | `common/mock_backend.ts` | MOCK_MODE backend (implements both interfaces) |
@@ -177,13 +180,13 @@ Two projects in `jest.config.js`:
 - `server` -- Node environment, tests in `common/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
-Current: **35 test files, 935 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
+Current: **37 test files, 962 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
 
 OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new OUI components to production code, check if a mock exists -- components needing interaction in tests (click handlers, selectable props, role attributes) require explicit mocks.
 
 ### E2E Tests (Cypress)
 
-9 spec files in `cypress/e2e/` with **81 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 10). Two modes:
+10 spec files in `cypress/e2e/` with **93 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10). Two modes:
 
 **Standalone mode** (default, fast, no Docker needed):
 ```bash

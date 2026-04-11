@@ -83,4 +83,15 @@ describe('Services Tab', () => {
     cy.get('[data-test-subj="services-table"] tbody tr').should('have.length', 1);
     cy.get('[data-test-subj="service-name-payment-service"]').should('exist');
   });
+
+  it('shows SLO Coverage column in table', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.contains('SLO Coverage').should('exist');
+  });
+
+  it('flyout shows Suggested SLOs panel', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.get('[data-test-subj="service-name-api-gateway"]').click();
+    cy.get('[data-test-subj="suggested-slos-panel"]').should('exist');
+  });
 });

@@ -86,6 +86,11 @@ import { OtelServiceDiscoveryService } from '../common/otel_service_discovery';
 import { handleListServices, handleGetService } from '../server/routes/service_handlers';
 import type { PrometheusMetadataProvider } from '../common/types';
 import { MockOtelProvider } from '../common/testing';
+import { SloSuggestionEngine } from '../common/slo_suggestion_engine';
+import {
+  handleGetSloSuggestions,
+  handleGetServiceBadges,
+} from '../server/routes/suggestion_handlers';
 
 const PORT = process.env.PORT || 5603;
 const MOCK_MODE = process.env.MOCK_MODE === 'true';
@@ -219,6 +224,12 @@ async function initBackends(): Promise<void> {
   const otelProvider = new MockOtelProvider();
   otelService = new OtelServiceDiscoveryService(otelProvider, sloService, alertService, logger);
   logger.info('OtelServiceDiscoveryService initialized (mock provider)');
+
+  // Initialize SLO suggestion engine if metadata service is available
+  if (metadataService) {
+    suggestionEngine = new SloSuggestionEngine(metadataService, sloService, logger);
+    logger.info('SloSuggestionEngine initialized');
+  }
 }
 
 // Suppression service
@@ -231,6 +242,7 @@ const sloService = new SloService(logger, MOCK_MODE);
 // Declared here so routes can reference it; populated before server starts.
 let metadataService: PrometheusMetadataService | undefined;
 let otelService: OtelServiceDiscoveryService | undefined;
+let suggestionEngine: SloSuggestionEngine | undefined;
 
 const app = express();
 app.use(express.json());
@@ -383,6 +395,31 @@ app.get('/api/services', async (_req, res) => {
     return res.json({ services: [], total: 0 });
   }
   const r = await handleListServices(otelService, logger);
+  res.status(r.status).json(r.body);
+});
+
+// Badge route MUST come before /api/services/:name to avoid path shadowing
+app.get('/api/services/badges', async (req, res) => {
+  if (!suggestionEngine || !otelService) {
+    return res.json({ badges: {} });
+  }
+  const dsId = (req.query.dsId as string) || 'ds-2';
+  const r = await handleGetServiceBadges(suggestionEngine, otelService, dsId, logger);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/services/:name/slo-suggestions', async (req, res) => {
+  if (!suggestionEngine || !otelService) {
+    return res.json({ service: req.params.name, suggestions: [], existingSloIds: [] });
+  }
+  const dsId = (req.query.dsId as string) || 'ds-2';
+  const r = await handleGetSloSuggestions(
+    suggestionEngine,
+    otelService,
+    req.params.name,
+    dsId,
+    logger
+  );
   res.status(r.status).json(r.body);
 });
 

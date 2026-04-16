@@ -63,9 +63,9 @@ Claude should invoke agents proactively for these situations **without being ask
 ## Quick Reference
 
 ```bash
-npm test                          # Run all unit tests (Jest, 31 files, 864 tests)
+npm test                          # Run all unit tests (Jest, 53 files, 1144 tests)
 npm run test:coverage             # Unit tests with coverage (80%+ branches, 90%+ lines/functions/statements)
-npm run e2e                       # Cypress E2E against standalone (MOCK_MODE, port 5603), 55 tests
+npm run e2e                       # Cypress E2E against standalone (MOCK_MODE, port 5603), 140 tests
 ./scripts/e2e-osd.sh              # Full OSD E2E: teardown + rebuild + clean stack + Cypress
 ./scripts/e2e-osd.sh --running    # OSD E2E against already-running stack (no teardown)
 ./scripts/e2e-osd.sh --no-rebuild # OSD E2E: teardown + restart, skip plugin build
@@ -197,6 +197,17 @@ yarn start --config config/opensearch_dashboards.dev.yml
 | **Hash Routing Hook** | `public/hooks/use_hash_routing.ts` | Bidirectional URL hash ↔ component state sync |
 | **Navigation Service** | `public/services/navigation_service.ts` | Cross-app navigation via OSD `navigateToApp()` + standalone fallback |
 | **Service Health Handler** | `server/routes/service_health_handlers.ts` | APM integration API: alerts + SLOs for a service |
+| **Root Cause Types** | `common/root_cause_types.ts` | ErrorBudgetForecast, CoverageGapReport, IncidentGroup, RootCauseAnalysis types |
+| **Error Budget Forecast** | `common/error_budget_forecast.ts` | Pure function: burn rate computation, time-to-exhaustion prediction |
+| **Coverage Gap Service** | `common/coverage_gap_service.ts` | Pure function: service inventory vs SLO/alert coverage analysis |
+| **Incident Grouping** | `common/incident_grouping_service.ts` | Pure function: union-find grouping of co-firing alerts on related services |
+| **RCA Service** | `common/root_cause_analysis_service.ts` | Orchestrates correlation + topology + narrative synthesis for root cause analysis |
+| **RCA Handlers** | `server/routes/rca_handlers.ts` | Framework-agnostic handler for RCA API |
+| **Coverage Gap Handlers** | `server/routes/coverage_gap_handlers.ts` | Framework-agnostic handler for coverage gaps API |
+| **Incident Handlers** | `server/routes/incident_handlers.ts` | Framework-agnostic handler for grouped incidents API |
+| **RCA Panel** | `public/components/root_cause_analysis_panel.tsx` | Narrative + evidence + dependency alerts in alert detail flyout |
+| **Coverage Gap Panel** | `public/components/coverage_gap_panel.tsx` | SLO coverage summary + per-service gap table |
+| **Forecast Badge** | `public/components/error_budget_forecast_badge.tsx` | Inline badge in SLO detail flyout: "Exhausts in ~2h 30m" |
 | **Build Script** | `build.sh` | Thin wrapper around `yarn plugin-helpers build` |
 
 ## Testing
@@ -207,13 +218,13 @@ Two projects in `jest.config.js`:
 - `server` -- Node environment, tests in `common/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
-Current: **47 test files, 1084 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
+Current: **53 test files, 1144 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
 
 OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new OUI components to production code, check if a mock exists -- components needing interaction in tests (click handlers, selectable props, role attributes) require explicit mocks.
 
 ### E2E Tests (Cypress)
 
-13 spec files in `cypress/e2e/` with **126 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8, deep links 12, topology 13). Two modes:
+14 spec files in `cypress/e2e/` with **140 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8, deep links 12, topology 13, root cause 14). Two modes:
 
 **Standalone mode** (default, fast, no Docker needed):
 ```bash

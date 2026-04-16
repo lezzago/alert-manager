@@ -16,7 +16,7 @@ import type { OtelService, OtelSignals, OtelServiceDiscoveryProvider, Logger } f
 import { HttpClient } from './http_client';
 
 /** Index patterns used by OTEL/Data Prepper. */
-const SERVICE_MAP_INDEX = 'otel-v1-apm-service-map*';
+const SERVICE_MAP_INDEX = 'otel-v*-apm-service-map*';
 const TRACES_INDEX = 'ss4o_traces-*-*';
 const LOGS_INDEX = 'ss4o_logs-*-*';
 const METRICS_INDEX = 'ss4o_metrics-*-*';

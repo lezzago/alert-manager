@@ -13,7 +13,7 @@ Transform the Alert Manager from an isolated alerting tool into an integrated ob
 | **Phase 3** | **Done** | Cross-signal correlation (traces + logs on alerts) |
 | **Phase 4** | **Done** | Bidirectional deep links (Alert Manager <-> APM) |
 | **Phase 5** | **Done** | Service health dashboard with topology map |
-| **Phase 6** | Not started | Intelligent root cause suggestion engine |
+| **Phase 6** | **Done** | Intelligent root cause suggestion engine |
 
 ---
 
@@ -186,25 +186,40 @@ Used ECharts graph chart (already bundled as a dependency) instead of APM's Cele
 
 ---
 
-## Phase 6: Intelligent Root Cause Suggestions
+## Phase 6: Intelligent Root Cause Suggestions (DONE)
 
 **Goal**: Proactively suggest root causes by synthesizing all signals.
 
+**What was built:**
+- `ErrorBudgetForecast` types + `forecastErrorBudgetExhaustion()` pure function with burn rate computation and time-to-exhaustion prediction
+- `CoverageGapReport` types + `computeCoverageGaps()` pure function analyzing service inventory vs SLO/alert coverage
+- `IncidentGroup` types + `groupIncidents()` pure function using union-find on dependency graph to cluster co-firing alerts
+- `RootCauseAnalysisService` class orchestrating correlation data + topology analysis + template-based narrative synthesis
+- 3 framework-agnostic API handlers: `POST /rca`, `GET /coverage-gaps`, `GET /incidents/grouped`
+- Routes wired in both OSD plugin (`server/routes/index.ts`) and standalone server (`standalone/server.ts`)
+- `ErrorBudgetForecastBadge` React component — inline badge in SLO detail flyout showing "Exhausts in ~2h 30m"
+- `RootCauseAnalysisPanel` React component — narrative, confidence badge, root service, dependency alerts, evidence list, suggested actions
+- `CoverageGapPanel` React component — summary stats + per-service gap table with severity badges
+- Alert detail flyout: "Root Cause Analysis" accordion after correlation panel (conditionally shown for alerts with service label)
+- Service Health Dashboard: incidents panel upgraded from flat per-service cards to grouped incident cards with root service, confidence badges, and related services
+- Services tab: coverage gap panel showing SLO coverage %, uncovered service count, and per-service gap details
+- 50 new unit tests (4 common service tests + 2 component tests) + 14 new Cypress E2E tests
+
 ### 6.1 — Coverage Gaps Report
 
-Analyze service inventory vs existing SLOs, show % coverage per service.
+Analyze service inventory vs existing SLOs, show % coverage per service. Pure function `computeCoverageGaps()` uses `EnrichedOtelService` enrichment data (sloCount, activeAlertCount, signals). Gap severity: high (signals but no SLOs/alerts), medium (partial coverage), low (minor gaps), none (fully covered). `CoverageGapPanel` displays summary stats and gap table on the Services tab.
 
 ### 6.2 — Alert-Time Root Cause Suggestion
 
-When alert fires: pull error traces + logs, group by attribute, check dependency alerts, synthesize narrative.
+When alert fires: `RootCauseAnalysisService` pulls correlations (reuses `AlertCorrelationService`), builds topology to find alerting dependencies, fetches dependency correlations (top 3), then synthesizes a template-based narrative. Evidence includes failure modes, dependency alerts, error logs, and blast radius. Confidence: high (3+ signal types), medium (2), low (1). `RootCauseAnalysisPanel` displays in alert detail flyout.
 
 ### 6.3 — SLO Impact Forecasting
 
-"At current burn rate, error budget exhausted in 2h 14m"
+`forecastErrorBudgetExhaustion()` computes burn rate from `(1 - attainment) / (1 - target)` and predicts exhaustion time as `remaining_budget × window / burn_rate`. Severity thresholds: critical (<2h), warning (<24h), ok (>24h). `ErrorBudgetForecastBadge` renders inline in SLO detail flyout — pure client-side computation, no API endpoint needed.
 
 ### 6.4 — Cross-Service Incident Grouping
 
-Detect temporal correlation, use dependency graph to identify root service, group into incidents.
+`groupIncidents()` uses union-find on the dependency subgraph restricted to services with active incidents. `findRootService()` identifies the deepest dependency with the most dependents as the root cause. Confidence: high (clear single chain), medium (connected but multiple roots), low (weakly connected). Replaces flat incident cards in `ServiceHealthDashboard` with grouped cards showing root service, confidence, related services, and blast radius.
 
 ---
 

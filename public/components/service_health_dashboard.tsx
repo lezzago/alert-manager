@@ -36,6 +36,8 @@ import {
   computeFullBlastRadius,
   extractActiveIncidents,
 } from '../../common/topology_service';
+import { groupIncidents } from '../../common/incident_grouping_service';
+import type { IncidentGroup } from '../../common/root_cause_types';
 import { TopologyGraphView } from './topology_graph';
 
 interface ServiceHealthDashboardProps {
@@ -77,6 +79,12 @@ export const ServiceHealthDashboard: React.FC<ServiceHealthDashboardProps> = ({
 
   // Extract active incidents
   const incidents: ActiveIncident[] = useMemo(() => extractActiveIncidents(baseGraph), [baseGraph]);
+
+  // Group incidents by dependency chain (Phase 6.4)
+  const incidentGroups: IncidentGroup[] = useMemo(
+    () => groupIncidents(incidents, baseGraph),
+    [incidents, baseGraph]
+  );
 
   // Handle node click
   const handleNodeClick = useCallback(
@@ -238,69 +246,101 @@ export const ServiceHealthDashboard: React.FC<ServiceHealthDashboardProps> = ({
 
       <EuiSpacer size="m" />
 
-      {/* Bottom panel: Active Incidents */}
+      {/* Bottom panel: Active Incidents (grouped by dependency chain) */}
       <EuiPanel paddingSize="m" hasBorder data-test-subj="topology-incidents-panel">
         <EuiTitle size="xs">
           <h3>
             Active Incidents{' '}
-            {incidents.length > 0 && <EuiBadge color="danger">{incidents.length}</EuiBadge>}
+            {incidentGroups.length > 0 && (
+              <EuiBadge color="danger">
+                {incidentGroups.length} group{incidentGroups.length !== 1 ? 's' : ''}
+              </EuiBadge>
+            )}
           </h3>
         </EuiTitle>
         <EuiSpacer size="s" />
 
-        {incidents.length === 0 ? (
+        {incidentGroups.length === 0 ? (
           <EuiText size="s" color="subdued" data-test-subj="topology-no-incidents">
             No active incidents. All services are healthy.
           </EuiText>
         ) : (
           <EuiFlexGroup gutterSize="s" wrap data-test-subj="topology-incident-list">
-            {incidents.map((incident) => (
-              <EuiFlexItem
-                key={incident.serviceName}
-                grow={false}
-                style={{ minWidth: 280, maxWidth: 400 }}
-              >
+            {incidentGroups.map((group) => (
+              <EuiFlexItem key={group.id} grow={false} style={{ minWidth: 280, maxWidth: 420 }}>
                 <EuiPanel
                   paddingSize="s"
                   hasBorder
-                  color={focusedIncident === incident.serviceName ? 'danger' : 'plain'}
-                  onClick={() => handleIncidentClick(incident.serviceName)}
+                  color={focusedIncident === group.rootService ? 'danger' : 'plain'}
+                  onClick={() => handleIncidentClick(group.rootService)}
                   style={{ cursor: 'pointer' }}
-                  data-test-subj={`topology-incident-${incident.serviceName}`}
+                  data-test-subj={`topology-incident-group-${group.rootService}`}
                 >
                   <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
                     <EuiFlexItem grow={false}>
-                      <EuiHealth color={healthLabel(incident.health)}>
-                        <strong>{incident.serviceName}</strong>
+                      <EuiHealth color={healthLabel(group.rootHealth)}>
+                        <strong>{group.rootService}</strong>
                       </EuiHealth>
                     </EuiFlexItem>
                     <EuiFlexItem grow={false}>
                       <EuiBadge color="danger">
-                        {incident.alertCount} alert{incident.alertCount !== 1 ? 's' : ''}
+                        {group.totalAlertCount} alert{group.totalAlertCount !== 1 ? 's' : ''}
+                      </EuiBadge>
+                    </EuiFlexItem>
+                    <EuiFlexItem grow={false}>
+                      <EuiBadge
+                        color={
+                          group.rootCauseConfidence === 'high'
+                            ? 'success'
+                            : group.rootCauseConfidence === 'medium'
+                              ? 'warning'
+                              : 'hollow'
+                        }
+                        data-test-subj={`incident-group-confidence-${group.rootService}`}
+                      >
+                        {group.rootCauseConfidence}
                       </EuiBadge>
                     </EuiFlexItem>
                   </EuiFlexGroup>
 
-                  {incident.worstErrorBudget !== undefined && (
-                    <EuiText size="xs" style={{ marginTop: 4 }}>
-                      Error budget: {(incident.worstErrorBudget * 100).toFixed(1)}%
-                    </EuiText>
+                  {/* Show grouped services if more than one */}
+                  {group.incidents.length > 1 && (
+                    <>
+                      <EuiSpacer size="xs" />
+                      <EuiText size="xs" color="subdued">
+                        Related services:{' '}
+                        {group.incidents
+                          .filter((inc) => inc.serviceName !== group.rootService)
+                          .map((inc) => (
+                            <EuiBadge
+                              key={inc.serviceName}
+                              color="hollow"
+                              style={{ marginRight: 2, marginBottom: 2 }}
+                            >
+                              {inc.serviceName} ({inc.alertCount})
+                            </EuiBadge>
+                          ))}
+                      </EuiText>
+                    </>
                   )}
 
-                  {incident.impactedUpstream.length > 0 && (
+                  {/* Blast radius */}
+                  {group.affectedServices.length > group.incidents.length && (
                     <>
                       <EuiSpacer size="xs" />
                       <EuiText size="xs" color="subdued">
                         Blast radius:{' '}
-                        {incident.impactedUpstream.map((name) => (
-                          <EuiBadge
-                            key={name}
-                            color="hollow"
-                            style={{ marginRight: 2, marginBottom: 2 }}
-                          >
-                            {name}
-                          </EuiBadge>
-                        ))}
+                        {group.affectedServices
+                          .filter((s) => !group.incidents.some((i) => i.serviceName === s))
+                          .map((name) => (
+                            <EuiBadge
+                              key={name}
+                              color="hollow"
+                              style={{ marginRight: 2, marginBottom: 2 }}
+                            >
+                              {name}
+                            </EuiBadge>
+                          ))}
                       </EuiText>
                     </>
                   )}

@@ -94,6 +94,10 @@ import {
 } from '../server/routes/suggestion_handlers';
 import { AlertCorrelationService } from '../common/alert_correlation_service';
 import { handleGetAlertCorrelations } from '../server/routes/correlation_handlers';
+import { RootCauseAnalysisService } from '../common/root_cause_analysis_service';
+import { handleGetRootCauseAnalysis } from '../server/routes/rca_handlers';
+import { handleGetCoverageGaps } from '../server/routes/coverage_gap_handlers';
+import { handleGetGroupedIncidents } from '../server/routes/incident_handlers';
 import type { UnifiedAlertSummary } from '../common/types';
 
 const PORT = process.env.PORT || 5603;
@@ -239,6 +243,10 @@ async function initBackends(): Promise<void> {
   const correlationProvider = new MockCorrelationProvider();
   correlationService = new AlertCorrelationService(correlationProvider, logger);
   logger.info('AlertCorrelationService initialized (mock provider)');
+
+  // Initialize root cause analysis service (Phase 6.2)
+  rcaService = new RootCauseAnalysisService(correlationService, logger);
+  logger.info('RootCauseAnalysisService initialized');
 }
 
 // Suppression service
@@ -253,6 +261,7 @@ let metadataService: PrometheusMetadataService | undefined;
 let otelService: OtelServiceDiscoveryService | undefined;
 let suggestionEngine: SloSuggestionEngine | undefined;
 let correlationService: AlertCorrelationService | undefined;
+let rcaService: RootCauseAnalysisService | undefined;
 
 const app = express();
 app.use(express.json());
@@ -479,6 +488,61 @@ app.post('/api/correlations', async (req, res) => {
     datasourceId,
     logger
   );
+  res.status(r.status).json(r.body);
+});
+
+// ============================================================================
+// Root Cause Analysis Routes (Phase 6)
+// ============================================================================
+
+app.post('/api/rca', async (req, res) => {
+  if (!rcaService || !otelService) {
+    return res.json({
+      alertId: '',
+      serviceName: '',
+      narrative: 'Root cause analysis service not available.',
+      confidence: 'low',
+      evidence: [],
+      rootService: null,
+      dependencyAlerts: [],
+      suggestedActions: [],
+      computedAt: new Date().toISOString(),
+    });
+  }
+  const { alert, sloQuery, datasourceId } = req.body;
+  const r = await handleGetRootCauseAnalysis(
+    rcaService,
+    otelService,
+    alert as UnifiedAlertSummary,
+    sloQuery,
+    datasourceId,
+    logger
+  );
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/coverage-gaps', async (_req, res) => {
+  if (!otelService) {
+    return res.json({
+      totalServices: 0,
+      servicesWithSlos: 0,
+      servicesWithAlerts: 0,
+      servicesWithoutAnyCoverage: 0,
+      sloCoveragePercent: 0,
+      alertCoveragePercent: 0,
+      gaps: [],
+      computedAt: new Date().toISOString(),
+    });
+  }
+  const r = await handleGetCoverageGaps(otelService, logger);
+  res.status(r.status).json(r.body);
+});
+
+app.get('/api/incidents/grouped', async (_req, res) => {
+  if (!otelService) {
+    return res.json({ groups: [], ungrouped: [] });
+  }
+  const r = await handleGetGroupedIncidents(otelService, logger);
   res.status(r.status).json(r.body);
 });
 

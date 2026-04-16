@@ -31,6 +31,12 @@ import type {
   SuggestionBadgeData,
 } from '../../common/slo_suggestion_types';
 import type { AlertCorrelationResult } from '../../common/types';
+import type {
+  RootCauseAnalysis,
+  CoverageGapReport,
+  IncidentGroup,
+} from '../../common/root_cause_types';
+import type { ActiveIncident } from '../../common/topology_types';
 
 // ---------------------------------------------------------------------------
 // HttpClient interface — implemented by OSD's http service adapter or fetch()
@@ -155,6 +161,9 @@ interface ApiPaths {
   serviceHealth: (name: string) => string;
   apmConfig: string;
   correlations: string;
+  rca: string;
+  coverageGaps: string;
+  groupedIncidents: string;
 }
 
 const OSD_PATHS: ApiPaths = {
@@ -186,6 +195,9 @@ const OSD_PATHS: ApiPaths = {
   serviceHealth: (name) => `/api/alerting/services/${encodeURIComponent(name)}/health`,
   apmConfig: '/api/alerting/apm-config',
   correlations: '/api/alerting/correlations',
+  rca: '/api/alerting/rca',
+  coverageGaps: '/api/alerting/coverage-gaps',
+  groupedIncidents: '/api/alerting/incidents/grouped',
 };
 
 const STANDALONE_PATHS: ApiPaths = {
@@ -216,6 +228,9 @@ const STANDALONE_PATHS: ApiPaths = {
   serviceHealth: (name) => `/api/services/${encodeURIComponent(name)}/health`,
   apmConfig: '/api/apm-config',
   correlations: '/api/correlations',
+  rca: '/api/rca',
+  coverageGaps: '/api/coverage-gaps',
+  groupedIncidents: '/api/incidents/grouped',
 };
 
 // ---------------------------------------------------------------------------
@@ -554,6 +569,74 @@ export class AlarmsApiClient {
     alertManagerUrl: string;
   }> {
     return this.cachedGet(this.paths.serviceHealth(serviceName));
+  }
+
+  // ---- Root Cause Analysis (Phase 6) ---------------------------------------
+
+  async getRootCauseAnalysis(
+    alert: UnifiedAlertSummary,
+    sloQuery?: string,
+    datasourceId?: string
+  ): Promise<RootCauseAnalysis> {
+    const emptyResult: RootCauseAnalysis = {
+      alertId: alert.id,
+      serviceName: alert.labels?.service ?? '',
+      narrative: 'Root cause analysis unavailable.',
+      confidence: 'low',
+      evidence: [],
+      rootService: null,
+      dependencyAlerts: [],
+      suggestedActions: [],
+      computedAt: new Date().toISOString(),
+    };
+    try {
+      return await this.http.post<RootCauseAnalysis>(this.paths.rca, {
+        alert: {
+          id: alert.id,
+          datasourceId: alert.datasourceId,
+          datasourceType: alert.datasourceType,
+          name: alert.name,
+          state: alert.state,
+          severity: alert.severity,
+          startTime: alert.startTime,
+          lastUpdated: alert.lastUpdated,
+          labels: alert.labels,
+          annotations: alert.annotations,
+        },
+        sloQuery,
+        datasourceId,
+      });
+    } catch {
+      return emptyResult;
+    }
+  }
+
+  async getCoverageGaps(): Promise<CoverageGapReport> {
+    try {
+      return await this.cachedGet<CoverageGapReport>(this.paths.coverageGaps);
+    } catch {
+      return {
+        totalServices: 0,
+        servicesWithSlos: 0,
+        servicesWithAlerts: 0,
+        servicesWithoutAnyCoverage: 0,
+        sloCoveragePercent: 0,
+        alertCoveragePercent: 0,
+        gaps: [],
+        computedAt: new Date().toISOString(),
+      };
+    }
+  }
+
+  async getGroupedIncidents(): Promise<{
+    groups: IncidentGroup[];
+    ungrouped: ActiveIncident[];
+  }> {
+    try {
+      return await this.cachedGet(this.paths.groupedIncidents);
+    } catch {
+      return { groups: [], ungrouped: [] };
+    }
   }
 
   // ---- Cache management ---------------------------------------------------

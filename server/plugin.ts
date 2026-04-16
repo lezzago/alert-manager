@@ -36,6 +36,7 @@ import { PrometheusMetadataService } from '../common/prometheus_metadata_service
 import { SloSuggestionEngine } from '../common/slo_suggestion_engine';
 import { AlertCorrelationService } from '../common/alert_correlation_service';
 import { OpenSearchCorrelationProvider } from '../common/opensearch_correlation_provider';
+import { RootCauseAnalysisService } from '../common/root_cause_analysis_service';
 import { SavedObjectSloStore } from './slo_saved_object_store';
 import { HttpClient } from '../common/http_client';
 import type { SavedObjectsRepository } from '../common/apm_config_reader';
@@ -358,6 +359,13 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       );
     }
 
+    // Create root cause analysis service (Phase 6.2) — needs correlation + OTEL services.
+    let rcaService: RootCauseAnalysisService | undefined;
+    if (correlationService) {
+      rcaService = new RootCauseAnalysisService(correlationService, logger);
+      this.logger.info('alertManager: RootCauseAnalysisService initialized');
+    }
+
     defineRoutes(
       router,
       datasourceService,
@@ -370,7 +378,8 @@ export class AlarmsPlugin implements Plugin<AlarmsPluginSetup, AlarmsPluginStart
       apmConfigReader,
       () => this.apmRepository,
       suggestionEngine,
-      correlationService
+      correlationService,
+      rcaService
     );
 
     return {};

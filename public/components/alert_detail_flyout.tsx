@@ -34,6 +34,7 @@ import { UnifiedAlert, Datasource } from '../../common';
 import { AlarmsApiClient } from '../services/alarms_client';
 import type { NavigationService } from '../services/navigation_service';
 import { AlertCorrelationPanel } from './alert_correlation_panel';
+import { RootCauseAnalysisPanel } from './root_cause_analysis_panel';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'danger',
@@ -249,6 +250,26 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
                 apiClient={apiClient}
                 navigationService={navigationService}
               />
+            </EuiAccordion>
+            <EuiSpacer size="m" />
+
+            {/* Root Cause Analysis (Phase 6.2) */}
+            <EuiAccordion
+              id={`alertRca-${alert.id}`}
+              buttonContent={
+                <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                  <EuiFlexItem grow={false}>
+                    <EuiIcon type="inspect" />
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <strong>Root Cause Analysis</strong>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+              }
+              initialIsOpen={true}
+              paddingSize="m"
+            >
+              <RootCauseAnalysisPanel alert={alertData} apiClient={apiClient} />
             </EuiAccordion>
             <EuiSpacer size="m" />
           </>

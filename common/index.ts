@@ -49,6 +49,15 @@ export { ApmConfigReader } from './apm_config_reader';
 export { OpenSearchOtelProvider } from './opensearch_otel_provider';
 export { AlertCorrelationService } from './alert_correlation_service';
 export { OpenSearchCorrelationProvider } from './opensearch_correlation_provider';
+export { RootCauseAnalysisService } from './root_cause_analysis_service';
+export { computeCoverageGaps, computeGapSeverity } from './coverage_gap_service';
+export {
+  forecastErrorBudgetExhaustion,
+  formatTimeRemaining,
+  forecastSeverityFromTime,
+} from './error_budget_forecast';
+export { groupIncidents, findRootService } from './incident_grouping_service';
+export * from './root_cause_types';
 
 export type { AlertManagerError, NotFoundError, ValidationError, InternalError } from './errors';
 export {

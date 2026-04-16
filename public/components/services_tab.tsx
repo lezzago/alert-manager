@@ -27,6 +27,7 @@ import type { SuggestionBadgeData } from '../../common/slo_suggestion_types';
 import { ServiceDetailFlyout } from './service_detail_flyout';
 import { CreateSloWizard } from './create_slo_wizard';
 import { ServiceHealthDashboard } from './service_health_dashboard';
+import { CoverageGapPanel } from './coverage_gap_panel';
 
 interface ServicesTabProps {
   apiClient: AlarmsApiClient;
@@ -399,6 +400,23 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
       </EuiFlexGroup>
 
       <EuiSpacer size="m" />
+
+      {/* Coverage Gap Analysis (Phase 6.1) */}
+      {services.length > 0 && (
+        <>
+          <CoverageGapPanel
+            apiClient={apiClient}
+            onServiceSelect={(serviceName) => {
+              const svc = services.find((s) => s.name === serviceName);
+              if (svc) {
+                setSelectedService(svc);
+                onServiceSelect?.(serviceName);
+              }
+            }}
+          />
+          <EuiSpacer size="m" />
+        </>
+      )}
 
       {/* View content */}
       {viewMode === 'topology' ? (

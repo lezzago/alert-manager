@@ -65,8 +65,12 @@ import { handleListServices, handleGetService, handleGetApmConfig } from './serv
 import { handleGetSloSuggestions, handleGetServiceBadges } from './suggestion_handlers';
 import { handleGetAlertCorrelations } from './correlation_handlers';
 import { handleServiceHealth } from './service_health_handlers';
+import { handleGetRootCauseAnalysis } from './rca_handlers';
+import { handleGetCoverageGaps } from './coverage_gap_handlers';
+import { handleGetGroupedIncidents } from './incident_handlers';
 import type { SloSuggestionEngine } from '../../common/slo_suggestion_engine';
 import type { AlertCorrelationService } from '../../common/alert_correlation_service';
+import type { RootCauseAnalysisService } from '../../common/root_cause_analysis_service';
 
 export function defineRoutes(
   router: IRouter,
@@ -80,7 +84,8 @@ export function defineRoutes(
   apmConfigReader?: ApmConfigReader,
   getApmRepository?: () => SavedObjectsRepository | undefined,
   suggestionEngine?: SloSuggestionEngine,
-  correlationService?: AlertCorrelationService
+  correlationService?: AlertCorrelationService,
+  rcaService?: RootCauseAnalysisService
 ) {
   // Datasource routes
   router.get({ path: '/api/alerting/datasources', validate: false }, async (_ctx, _req, res) => {
@@ -912,6 +917,74 @@ export function defineRoutes(
           datasourceId,
           logger
         );
+        return res.ok({ body: result.body });
+      }
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Root Cause Analysis routes (Phase 6 — optional)
+  // --------------------------------------------------------------------------
+
+  if (rcaService && otelService) {
+    router.post(
+      {
+        path: '/api/alerting/rca',
+        validate: {
+          body: schema.object({
+            alert: schema.object({
+              id: schema.string(),
+              datasourceId: schema.string(),
+              datasourceType: schema.string(),
+              name: schema.string(),
+              state: schema.string(),
+              severity: schema.string(),
+              startTime: schema.string(),
+              lastUpdated: schema.string(),
+              labels: schema.recordOf(schema.string(), schema.string(), { defaultValue: {} }),
+              annotations: schema.recordOf(schema.string(), schema.string(), { defaultValue: {} }),
+            }),
+            sloQuery: schema.maybe(schema.string()),
+            datasourceId: schema.maybe(schema.string()),
+          }),
+        },
+      },
+      async (_ctx, req, res) => {
+        const { alert, sloQuery, datasourceId } = req.body as {
+          alert: Record<string, unknown>;
+          sloQuery?: string;
+          datasourceId?: string;
+        };
+        const result = await handleGetRootCauseAnalysis(
+          rcaService,
+          otelService,
+          alert as unknown as import('../../common/types').UnifiedAlertSummary,
+          sloQuery,
+          datasourceId,
+          logger
+        );
+        return res.ok({ body: result.body });
+      }
+    );
+  }
+
+  // Coverage Gaps route (Phase 6.1 — optional, needs otelService)
+  if (otelService) {
+    router.get(
+      { path: '/api/alerting/coverage-gaps', validate: false },
+      async (_ctx, _req, res) => {
+        const result = await handleGetCoverageGaps(otelService, logger);
+        return res.ok({ body: result.body });
+      }
+    );
+  }
+
+  // Grouped Incidents route (Phase 6.4 — optional, needs otelService)
+  if (otelService) {
+    router.get(
+      { path: '/api/alerting/incidents/grouped', validate: false },
+      async (_ctx, _req, res) => {
+        const result = await handleGetGroupedIncidents(otelService, logger);
         return res.ok({ body: result.body });
       }
     );

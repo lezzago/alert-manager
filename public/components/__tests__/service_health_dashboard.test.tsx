@@ -101,7 +101,7 @@ describe('ServiceHealthDashboard', () => {
   it('shows active incidents for services with alerts', () => {
     render(<ServiceHealthDashboard services={mockServices} />);
 
-    expect(screen.getByTestId('topology-incident-payment-service')).toBeDefined();
+    expect(screen.getByTestId('topology-incident-group-payment-service')).toBeDefined();
     expect(screen.getByText(/2 alert/)).toBeDefined();
   });
 
@@ -118,7 +118,7 @@ describe('ServiceHealthDashboard', () => {
   it('shows blast radius in incident cards', () => {
     render(<ServiceHealthDashboard services={mockServices} />);
 
-    const incident = screen.getByTestId('topology-incident-payment-service');
+    const incident = screen.getByTestId('topology-incident-group-payment-service');
     // api-gateway depends on payment-service, so it's in the blast radius
     expect(incident.textContent).toContain('api-gateway');
   });
@@ -148,11 +148,11 @@ describe('ServiceHealthDashboard', () => {
     expect(apiGateway.textContent).toContain('85%');
   });
 
-  it('shows incident error budget information', () => {
+  it('shows incident group confidence badge', () => {
     render(<ServiceHealthDashboard services={mockServices} />);
 
-    const incident = screen.getByTestId('topology-incident-payment-service');
-    expect(incident.textContent).toContain('5.0%');
+    const confidenceBadge = screen.getByTestId('incident-group-confidence-payment-service');
+    expect(confidenceBadge).toBeDefined();
   });
 
   it('passes nodes to topology graph', () => {

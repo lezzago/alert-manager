@@ -39,6 +39,7 @@ import {
   attainmentColor,
   errorBudgetColor,
 } from './shared_constants';
+import { ErrorBudgetForecastBadge } from './error_budget_forecast_badge';
 
 // ============================================================================
 // Props
@@ -275,6 +276,23 @@ export const SloDetailFlyout: React.FC<SloDetailFlyoutProps> = ({
               </EuiText>
             </EuiFlexItem>
           </EuiFlexGroup>
+
+          {/* Error Budget Forecast (Phase 6.3) */}
+          {fullSlo && status && (
+            <>
+              <EuiSpacer size="s" />
+              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                <EuiFlexItem grow={false}>
+                  <EuiText size="xs" color="subdued">
+                    Forecast:
+                  </EuiText>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <ErrorBudgetForecastBadge status={status} slo={fullSlo} />
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </>
+          )}
 
           <EuiSpacer size="l" />
           <EuiHorizontalRule margin="none" />

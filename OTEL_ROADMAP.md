@@ -12,7 +12,7 @@ Transform the Alert Manager from an isolated alerting tool into an integrated ob
 | **Phase 2** | **Done** | SLO suggestion engine based on discovered metrics |
 | **Phase 3** | **Done** | Cross-signal correlation (traces + logs on alerts) |
 | **Phase 4** | **Done** | Bidirectional deep links (Alert Manager <-> APM) |
-| **Phase 5** | Not started | Service health dashboard with topology map |
+| **Phase 5** | **Done** | Service health dashboard with topology map |
 | **Phase 6** | Not started | Intelligent root cause suggestion engine |
 
 ---
@@ -144,28 +144,45 @@ Hash-based routing with bidirectional URL ↔ state sync:
 
 ---
 
-## Phase 5: Service Health Dashboard & Topology
+## Phase 5: Service Health Dashboard & Topology (DONE)
 
 **Goal**: Unified view combining service map topology with alerting/SLO health.
 
+**What was built:**
+- `TopologyNode`, `TopologyEdge`, `TopologyGraph`, `ActiveIncident` types in `common/topology_types.ts`
+- `TopologyService` pure functions: `buildTopologyGraph()`, `computeHealthLevel()`, `computeBlastRadius()`, `computeFullBlastRadius()`, `extractActiveIncidents()`
+- `ServiceHealthDashboard` component — three-panel layout (service list + topology graph + active incidents)
+- `TopologyGraphView` component — ECharts force-directed graph with health-colored nodes, alert badges, blast radius highlighting
+- View toggle in Services tab: switch between List (table) and Topology (dashboard) views
+- Health computation: critical (alerts or EB<10%), degraded (EB 10-30%), healthy (EB>30%), unknown (no SLOs)
+- Blast radius visualization: BFS through reverse dependency graph, highlights upstream impacted services
+- Incident focus: click an incident to highlight its blast radius in the graph
+- Node tooltips showing service name, health, alert count, SLO count, error budget, dependencies
+- 25 new unit tests (topology_service) + 14 new component tests (service_health_dashboard)
+- 13 new Cypress E2E tests (view toggle, topology rendering, incidents, blast radius, interactions)
+
 ### 5.1 — Service Health Overview
 
-Three-panel layout:
-- **Left**: Service list with health indicators
-- **Center**: Topology graph with SLO attainment on nodes, alert counts on badges
-- **Bottom**: Active incidents with dependency chain
+Three-panel layout integrated into Services tab with view toggle:
+- **Left panel**: Compact service list sorted by health (critical first), with health indicator border, alert count badges, error budget percentages
+- **Center panel**: ECharts force-directed graph with SLO attainment on nodes, alert counts on badges, health-colored borders
+- **Bottom panel**: Active incidents with alert count, error budget, and blast radius (upstream impacted services)
 
 ### 5.2 — Topology Node Details
 
-Click a node to see: SLO status, active alerts, signal links (traces/logs/APM).
+Click a node in the graph or service list to open the existing `ServiceDetailFlyout` showing SLO status, active alerts, signal links, dependencies, and suggested SLOs.
 
 ### 5.3 — Dependency Impact Propagation
 
-When a service has firing alerts, highlight upstream services (blast radius).
+When a service has firing alerts, BFS traverses reverse dependency edges to find all upstream callers. The union of all critical services' blast radii is shown by default. Click a specific incident to focus on its individual blast radius. Non-impacted nodes and edges are dimmed.
 
-### 5.4 — Reuse APM's CelestialMap
+### 5.4 — Graph Visualization
 
-Overlay Alert Manager data on the same `@osd/apm-topology` CelestialMap component.
+Used ECharts graph chart (already bundled as a dependency) instead of APM's CelestialMap to avoid cross-plugin coupling. Force-directed layout with:
+- Configurable repulsion and edge length for readable topology
+- Adjacency-based emphasis on hover
+- Draggable, zoomable canvas
+- Responsive resize via ResizeObserver
 
 ---
 

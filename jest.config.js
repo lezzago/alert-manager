@@ -84,6 +84,7 @@ module.exports = {
     '!public/components/metric_browser.tsx',
     '!public/components/promql_editor.tsx',
     '!public/components/echarts_render.tsx',
+    '!public/components/topology_graph.tsx',
     '!public/components/table_pagination.tsx',
     '!public/components/sli_section.tsx',
     '!public/components/sli_combo_boxes.tsx',

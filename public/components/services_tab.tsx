@@ -17,6 +17,7 @@ import {
   EuiLoadingSpinner,
   EuiFieldSearch,
   EuiHealth,
+  EuiButtonGroup,
 } from '@elastic/eui';
 import type { AlarmsApiClient } from '../services/alarms_client';
 import type { NavigationService } from '../services/navigation_service';
@@ -25,6 +26,7 @@ import type { SloInput } from '../../common/slo_types';
 import type { SuggestionBadgeData } from '../../common/slo_suggestion_types';
 import { ServiceDetailFlyout } from './service_detail_flyout';
 import { CreateSloWizard } from './create_slo_wizard';
+import { ServiceHealthDashboard } from './service_health_dashboard';
 
 interface ServicesTabProps {
   apiClient: AlarmsApiClient;
@@ -66,6 +68,15 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [badges, setBadges] = useState<Record<string, SuggestionBadgeData>>({});
   const [wizardPrefill, setWizardPrefill] = useState<SloInput | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'topology'>('list');
+
+  const viewToggleOptions = useMemo(
+    () => [
+      { id: 'list', label: 'List' },
+      { id: 'topology', label: 'Topology' },
+    ],
+    []
+  );
 
   const fetchServices = useCallback(async () => {
     setLoading(true);
@@ -361,33 +372,63 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
 
       <EuiSpacer size="m" />
 
-      {/* Search */}
-      <EuiFieldSearch
-        placeholder="Search services..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        isClearable
-        fullWidth
-        data-test-subj="services-search"
-      />
+      {/* View toggle */}
+      <EuiFlexGroup alignItems="center" gutterSize="m">
+        <EuiFlexItem grow={false}>
+          <EuiButtonGroup
+            legend="Services view mode"
+            options={viewToggleOptions}
+            idSelected={viewMode}
+            onChange={(id) => setViewMode(id as 'list' | 'topology')}
+            buttonSize="compressed"
+            data-test-subj="services-view-toggle"
+          />
+        </EuiFlexItem>
+        {viewMode === 'list' && (
+          <EuiFlexItem>
+            <EuiFieldSearch
+              placeholder="Search services..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              isClearable
+              fullWidth
+              data-test-subj="services-search"
+            />
+          </EuiFlexItem>
+        )}
+      </EuiFlexGroup>
 
       <EuiSpacer size="m" />
 
-      {/* Table */}
-      <EuiBasicTable<EnrichedOtelService>
-        items={filtered}
-        columns={columns}
-        sorting={{
-          sort: { field: sortField, direction: sortDirection },
-        }}
-        onChange={({ sort }) => {
-          if (sort) {
-            setSortField(sort.field as keyof EnrichedOtelService);
-            setSortDirection(sort.direction);
-          }
-        }}
-        data-test-subj="services-table"
-      />
+      {/* View content */}
+      {viewMode === 'topology' ? (
+        <ServiceHealthDashboard
+          services={services}
+          navigationService={navigationService}
+          onServiceSelect={(serviceName) => {
+            const svc = services.find((s) => s.name === serviceName);
+            if (svc) {
+              setSelectedService(svc);
+              onServiceSelect?.(serviceName);
+            }
+          }}
+        />
+      ) : (
+        <EuiBasicTable<EnrichedOtelService>
+          items={filtered}
+          columns={columns}
+          sorting={{
+            sort: { field: sortField, direction: sortDirection },
+          }}
+          onChange={({ sort }) => {
+            if (sort) {
+              setSortField(sort.field as keyof EnrichedOtelService);
+              setSortDirection(sort.direction);
+            }
+          }}
+          data-test-subj="services-table"
+        />
+      )}
 
       {/* Detail Flyout */}
       {selectedService && (

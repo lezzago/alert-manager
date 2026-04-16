@@ -179,8 +179,12 @@ yarn start --config config/opensearch_dashboards.dev.yml
 | **OTEL Provider** | `common/opensearch_otel_provider.ts` | Live DSL queries against `otel-v1-apm-service-map*` |
 | **APM Config** | `common/apm_config_reader.ts` | Reads APM dataset config from observability plugin saved objects |
 | **Service Handlers** | `server/routes/service_handlers.ts` | Framework-agnostic handlers for service discovery routes |
-| **Services Tab** | `public/components/services_tab.tsx` | OTEL services table with stat cards and search |
+| **Services Tab** | `public/components/services_tab.tsx` | OTEL services table/topology with view toggle |
 | **Service Flyout** | `public/components/service_detail_flyout.tsx` | Service detail view with dependencies and signals |
+| **Topology Types** | `common/topology_types.ts` | TopologyNode, TopologyEdge, TopologyGraph, ActiveIncident, ServiceHealthLevel |
+| **Topology Service** | `common/topology_service.ts` | Pure functions: buildTopologyGraph, computeHealthLevel, computeBlastRadius, extractActiveIncidents |
+| **Topology Graph** | `public/components/topology_graph.tsx` | ECharts force-directed graph with health colors, blast radius |
+| **Health Dashboard** | `public/components/service_health_dashboard.tsx` | Three-panel layout: service list + topology graph + active incidents |
 | **Metadata Hook** | `public/hooks/use_prometheus_metadata.ts` | React hook: debounced fetch, cascading, graceful degradation |
 | **SLI Section** | `public/components/sli_section.tsx` | Extracted SLI form with `useReducer`, autocomplete |
 | **SLO Wizard** | `public/components/create_slo_wizard.tsx` | Multi-step SLO creation orchestrator |
@@ -203,20 +207,20 @@ Two projects in `jest.config.js`:
 - `server` -- Node environment, tests in `common/__tests__/` and `server/**/__tests__/`
 - `components` -- jsdom environment, tests in `public/**/__tests__/`
 
-Current: **45 test files, 1045 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
+Current: **47 test files, 1084 tests**. Coverage thresholds: 80% branches, 90% functions/lines/statements. Large render-heavy components are excluded from unit coverage and validated via Cypress E2E instead.
 
 OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new OUI components to production code, check if a mock exists -- components needing interaction in tests (click handlers, selectable props, role attributes) require explicit mocks.
 
 ### E2E Tests (Cypress)
 
-12 spec files in `cypress/e2e/` with **113 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8, deep links 12). Two modes:
+13 spec files in `cypress/e2e/` with **126 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8, deep links 12, topology 13). Two modes:
 
 **Standalone mode** (default, fast, no Docker needed):
 ```bash
 npm run e2e                       # Builds standalone, starts with MOCK_MODE, runs Cypress
 ```
 - Port 5603, mock data seeded automatically, no auth
-- All 71 tests pass (MOCK_MODE seeds alerts, rules, SLOs, metadata)
+- All tests pass (MOCK_MODE seeds alerts, rules, SLOs, metadata)
 
 **Docker OSD mode** (full stack, real data, Docker required):
 ```bash

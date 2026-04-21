@@ -65,12 +65,25 @@ export const ServiceDetailFlyout: React.FC<ServiceDetailFlyoutProps> = ({
   const [suggestionsLoading, setSuggestionsLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    const currentServiceName = service.name;
     setSuggestionsLoading(true);
     apiClient
       .getSloSuggestions(service.name)
-      .then((resp) => setSuggestions(resp.suggestions))
-      .catch(() => setSuggestions([]))
-      .finally(() => setSuggestionsLoading(false));
+      .then((resp) => {
+        if (!cancelled && service.name === currentServiceName) {
+          setSuggestions(resp.suggestions);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSuggestionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [apiClient, service.name]);
 
   const detailItems = [

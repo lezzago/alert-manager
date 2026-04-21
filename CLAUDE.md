@@ -125,7 +125,10 @@ yarn start --config config/opensearch_dashboards.dev.yml
 - Enriches services with SLO coverage and active alert counts from existing data
 - `ApmConfigReader` (`common/apm_config_reader.ts`) reads APM dataset config from `correlations` saved objects
 - 3 API routes: list services, get service, get APM config
-- Frontend: `ServicesTab` component with stat cards, searchable table, detail flyout
+- Frontend: `ServicesTab` component with stat cards, searchable table, accordion filter sidebar, sparkline columns, detail flyout
+- `MetricSparkline` (ECharts): gradient-fill inline chart for Alert Trend and Error Budget Trend columns
+- `ServicesEmptyState`: rich onboarding with tabs (Services/Topology/SLO Coverage) and setup steps
+- Mock sparkline data in `common/mock_data.ts` (`MOCK_SERVICE_TRENDS`)
 
 **Alert correlation**: `AlertCorrelationProvider` interface (`common/types.ts`) for cross-signal correlation:
 - Implemented by `OpenSearchCorrelationProvider` (queries `ss4o_traces-*-*`, `ss4o_logs-*-*`) and `MockCorrelationProvider` (MOCK_MODE)
@@ -179,16 +182,19 @@ yarn start --config config/opensearch_dashboards.dev.yml
 | **OTEL Provider** | `common/opensearch_otel_provider.ts` | Live DSL queries against `otel-v1-apm-service-map*` |
 | **APM Config** | `common/apm_config_reader.ts` | Reads APM dataset config from observability plugin saved objects |
 | **Service Handlers** | `server/routes/service_handlers.ts` | Framework-agnostic handlers for service discovery routes |
-| **Services Tab** | `public/components/services_tab.tsx` | OTEL services table/topology with view toggle |
+| **Services Tab** | `public/components/services_tab.tsx` | OTEL services table/topology with sparklines, filter sidebar, view toggle |
+| **Metric Sparkline** | `public/components/metric_sparkline.tsx` | Lightweight ECharts inline sparkline (gradient fill, no axes) |
+| **Services Empty State** | `public/components/services_empty_state.tsx` | Rich onboarding with tabs and setup steps |
 | **Service Flyout** | `public/components/service_detail_flyout.tsx` | Service detail view with dependencies and signals |
 | **Topology Types** | `common/topology_types.ts` | TopologyNode, TopologyEdge, TopologyGraph, ActiveIncident, ServiceHealthLevel |
 | **Topology Service** | `common/topology_service.ts` | Pure functions: buildTopologyGraph, computeHealthLevel, computeBlastRadius, extractActiveIncidents |
-| **Topology Graph** | `public/components/topology_graph.tsx` | ECharts force-directed graph with health colors, blast radius |
+| **Topology Graph** | `public/components/topology_celestial_graph.tsx` | CelestialMap (ReactFlow+Dagre) graph with health cards, blast radius |
 | **Health Dashboard** | `public/components/service_health_dashboard.tsx` | Three-panel layout: service list + topology graph + active incidents |
 | **Metadata Hook** | `public/hooks/use_prometheus_metadata.ts` | React hook: debounced fetch, cascading, graceful degradation |
 | **SLI Section** | `public/components/sli_section.tsx` | Extracted SLI form with `useReducer`, autocomplete |
 | **SLO Wizard** | `public/components/create_slo_wizard.tsx` | Multi-step SLO creation orchestrator |
 | **EUI Mocks** | `public/__mocks__/eui_mock.tsx` | OUI component test mocks (add new ones here) |
+| **APM Topology Mock** | `public/__mocks__/apm_topology_mock.tsx` | CelestialMap mock for Jest (ReactFlow unavailable in jsdom) |
 | **Correlation Service** | `common/alert_correlation_service.ts` | Cross-signal correlation orchestrator with caching + failure mode analysis |
 | **Correlation Provider** | `common/opensearch_correlation_provider.ts` | Live DSL queries against `ss4o_traces-*-*` and `ss4o_logs-*-*` |
 | **Correlation Handlers** | `server/routes/correlation_handlers.ts` | Framework-agnostic handler for correlation API |
@@ -224,7 +230,7 @@ OUI components are mocked via `public/__mocks__/eui_mock.tsx`. When adding new O
 
 ### E2E Tests (Cypress)
 
-14 spec files in `cypress/e2e/` with **140 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 12, SLO suggestions 10, correlations 8, deep links 12, topology 13, root cause 14). Two modes:
+14 spec files in `cypress/e2e/` with **167 total tests** (navigation 3, alerts 7, rules 8, SLOs 33, suppression 5, routing 3, API 10, error monitoring 2, services 20, SLO suggestions 10, correlations 16, deep links 12, topology 13, root cause 25). Two modes:
 
 **Standalone mode** (default, fast, no Docker needed):
 ```bash

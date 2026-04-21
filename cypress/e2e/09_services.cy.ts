@@ -94,4 +94,64 @@ describe('Services Tab', () => {
     cy.get('[data-test-subj="service-name-api-gateway"]').click();
     cy.get('[data-test-subj="suggested-slos-panel"]').should('exist');
   });
+
+  // ----- Sparkline columns -----
+
+  it('shows Alert Trend and Budget Trend columns', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.contains('Alert Trend').should('exist');
+    cy.contains('Budget Trend').should('exist');
+  });
+
+  it('renders sparkline charts in table rows', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    // ECharts sparklines render as canvas/div elements with data-test-subj
+    cy.get('[data-test-subj="metric-sparkline"]').should('have.length.greaterThan', 0);
+  });
+
+  // ----- Filter sidebar -----
+
+  it('shows filter sidebar with accordion groups', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.get('[data-test-subj="services-filter-sidebar"]').should('exist');
+    cy.get('[data-test-subj="filter-health-accordion"]').should('exist');
+    cy.get('[data-test-subj="filter-signal-accordion"]').should('exist');
+    cy.get('[data-test-subj="filter-slos-accordion"]').should('exist');
+  });
+
+  it('filters services by health level', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    // EUI checkboxes have visually-hidden <input> — force: true required
+    cy.get('[data-test-subj="filter-health-healthy"]').click({ force: true });
+    cy.get('[data-test-subj="active-filter-badges"]').should('exist');
+    cy.get('[data-test-subj="filter-badge-health-healthy"]').should('exist');
+    cy.get('[data-test-subj="services-table"] tbody tr').should('have.length.greaterThan', 0);
+  });
+
+  it('filters services by signal type', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.get('[data-test-subj="filter-signal-traces"]').click({ force: true });
+    cy.get('[data-test-subj="active-filter-badges"]').should('exist');
+    cy.get('[data-test-subj="filter-badge-signal-traces"]').should('exist');
+  });
+
+  it('filters services by SLO presence', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.get('[data-test-subj="filter-slo-yes"]').click({ force: true });
+    cy.get('[data-test-subj="active-filter-badges"]').should('exist');
+    cy.get('[data-test-subj="filter-badge-hasSlos-yes"]').should('exist');
+  });
+
+  it('clears all filters with Clear all badge', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.get('[data-test-subj="filter-health-critical"]').click({ force: true });
+    cy.get('[data-test-subj="active-filter-badges"]').should('exist');
+    cy.get('[data-test-subj="filter-clear-all"]').click();
+    cy.get('[data-test-subj="active-filter-badges"]').should('not.exist');
+  });
+
+  it('shows resizable container with sidebar and table panels', () => {
+    cy.get('[data-test-subj="alertManager-tabs-services"]').click();
+    cy.get('[data-test-subj="services-resizable"]').should('exist');
+  });
 });

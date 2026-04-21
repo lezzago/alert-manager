@@ -29,17 +29,10 @@ export async function handleGetRootCauseAnalysis(
     const msg = err instanceof Error ? err.message : String(err);
     if (logger) logger.warn(`handleGetRootCauseAnalysis failed: ${msg}`);
     return {
-      status: 200,
+      status: 503,
       body: {
-        alertId: alert.id,
-        serviceName: alert.labels?.service ?? '',
-        narrative: 'Root cause analysis temporarily unavailable.',
-        confidence: 'low',
-        evidence: [],
-        rootService: null,
-        dependencyAlerts: [],
-        suggestedActions: [],
-        computedAt: new Date().toISOString(),
+        error: 'Root cause analysis temporarily unavailable',
+        message: msg,
       },
     };
   }

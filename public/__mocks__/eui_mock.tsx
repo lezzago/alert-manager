@@ -247,6 +247,7 @@ export const EuiCodeBlock = stub('EuiCodeBlock');
 export const EuiDescriptionList = stub('EuiDescriptionList');
 export const EuiHorizontalRule = stub('EuiHorizontalRule');
 export const EuiLoadingSpinner = stub('EuiLoadingSpinner');
+export const EuiLoadingChart = stub('EuiLoadingChart');
 export const EuiLoadingContent = stub('EuiLoadingContent');
 export const EuiGlobalToastList = stub('EuiGlobalToastList');
 export const EuiFilterGroup = stub('EuiFilterGroup');

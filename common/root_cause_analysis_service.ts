@@ -34,6 +34,9 @@ const MAX_DEPENDENCY_CORRELATIONS = 3;
 /** Cache TTL for RCA results. */
 const CACHE_TTL_MS = 2 * 60_000;
 
+/** Maximum cache entries before triggering eviction. */
+const MAX_CACHE_SIZE = 100;
+
 interface CacheEntry {
   result: RootCauseAnalysis;
   fetchedAt: number;
@@ -67,6 +70,16 @@ export class RootCauseAnalysisService {
       return this.emptyAnalysis(alert.id, '');
     }
 
+    // Evict stale entries if cache exceeds max size
+    if (this.cache.size > MAX_CACHE_SIZE) {
+      const now = Date.now();
+      for (const [key, entry] of this.cache) {
+        if (now - entry.fetchedAt > CACHE_TTL_MS * 2) {
+          this.cache.delete(key);
+        }
+      }
+    }
+
     // Check cache
     const cacheKey = `${alert.id}:${serviceName}`;
     const cached = this.cache.get(cacheKey);
@@ -87,9 +100,13 @@ export class RootCauseAnalysisService {
       const serviceNode = graph.nodes.find((n) => n.id === serviceName);
       const service = serviceNode?.service;
 
+      if (!service) {
+        return this.emptyAnalysis(alert.id, serviceName);
+      }
+
       // Find dependencies that also have active alerts
       const alertingDeps: DependencyAlertInfo[] = [];
-      if (service) {
+      {
         for (const depName of service.dependencies) {
           const depNode = graph.nodes.find((n) => n.id === depName);
           if (depNode && depNode.service.activeAlertCount > 0) {

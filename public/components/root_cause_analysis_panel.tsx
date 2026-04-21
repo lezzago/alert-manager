@@ -10,11 +10,12 @@
  * Displays a narrative, evidence list, dependency alerts, and suggested actions.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   EuiText,
   EuiSpacer,
   EuiBadge,
+  EuiButton,
   EuiFlexGroup,
   EuiFlexItem,
   EuiLoadingSpinner,
@@ -42,14 +43,36 @@ export const RootCauseAnalysisPanel: React.FC<RootCauseAnalysisPanelProps> = ({
 }) => {
   const [analysis, setAnalysis] = useState<RootCauseAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAnalysis = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const result = await apiClient.getRootCauseAnalysis(alert);
+    if ((result as any)._error) {
+      setAnalysis(null);
+      setError((result as any)._errorMessage || 'Failed to load root cause analysis');
+    } else {
+      setAnalysis(result);
+    }
+    setLoading(false);
+  }, [alert.id, apiClient]);
 
   useEffect(() => {
     let cancelled = false;
+    const currentAlertId = alert.id;
     setLoading(true);
+    setError(null);
     apiClient
       .getRootCauseAnalysis(alert)
       .then((result) => {
-        if (!cancelled) setAnalysis(result);
+        if (cancelled || alert.id !== currentAlertId) return;
+        if ((result as any)._error) {
+          setAnalysis(null);
+          setError((result as any)._errorMessage || 'Failed to load root cause analysis');
+        } else {
+          setAnalysis(result);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -69,6 +92,17 @@ export const RootCauseAnalysisPanel: React.FC<RootCauseAnalysisPanelProps> = ({
           <EuiText size="s">Analyzing root cause...</EuiText>
         </EuiFlexItem>
       </EuiFlexGroup>
+    );
+  }
+
+  if (error) {
+    return (
+      <EuiCallOut title="Analysis unavailable" color="danger" iconType="alert" size="s">
+        <p>{error}</p>
+        <EuiButton size="s" onClick={fetchAnalysis}>
+          Retry
+        </EuiButton>
+      </EuiCallOut>
     );
   }
 

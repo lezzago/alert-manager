@@ -11,9 +11,9 @@ import type { EnrichedOtelService } from '../../../common/types';
 // OSD uses data-test-subj instead of data-testid
 configure({ testIdAttribute: 'data-test-subj' });
 
-// Mock the TopologyGraphView since it depends on ECharts (canvas-based, unavailable in jsdom)
-jest.mock('../topology_graph', () => ({
-  TopologyGraphView: ({ graph, onNodeClick, selectedNodeId }: any) => (
+// Mock the TopologyCelestialGraph since CelestialMap depends on ReactFlow (unavailable in jsdom)
+jest.mock('../topology_celestial_graph', () => ({
+  TopologyCelestialGraph: ({ graph, onNodeClick, selectedNodeId }: any) => (
     <div data-test-subj="topology-graph" data-selected={selectedNodeId}>
       {graph.nodes.map((n: any) => (
         <div key={n.id} data-test-subj={`graph-node-${n.id}`} onClick={() => onNodeClick?.(n.id)} />

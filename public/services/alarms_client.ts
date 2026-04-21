@@ -472,19 +472,30 @@ export class AlarmsApiClient {
     return this.cachedGet(this.paths.services);
   }
 
-  async getService(name: string): Promise<EnrichedOtelService | null> {
+  async getService(
+    name: string
+  ): Promise<(EnrichedOtelService & { _error?: boolean; _errorMessage?: string }) | null> {
     try {
       return await this.http.get<EnrichedOtelService>(this.paths.serviceDetail(name));
-    } catch {
-      return null;
+    } catch (e) {
+      return {
+        _error: true,
+        _errorMessage: (e as Error).message || 'Request failed',
+      } as EnrichedOtelService & { _error: boolean; _errorMessage: string };
     }
   }
 
-  async getApmConfig(): Promise<(ApmDatasetConfig & { configured: boolean }) | null> {
+  async getApmConfig(): Promise<
+    (ApmDatasetConfig & { configured: boolean; _error?: boolean; _errorMessage?: string }) | null
+  > {
     try {
       return await this.cachedGet(this.paths.apmConfig);
-    } catch {
-      return null;
+    } catch (e) {
+      return {
+        configured: false,
+        _error: true,
+        _errorMessage: (e as Error).message || 'Request failed',
+      } as ApmDatasetConfig & { configured: boolean; _error: boolean; _errorMessage: string };
     }
   }
 
@@ -496,19 +507,30 @@ export class AlarmsApiClient {
         return await this.http.get<SloSuggestionsResponse>(this.paths.sloSuggestions(serviceName));
       }
       return await this.http.get<SloSuggestionsResponse>(this.paths.sloSuggestions(serviceName));
-    } catch {
-      return { service: serviceName, suggestions: [], existingSloIds: [] };
+    } catch (e) {
+      return {
+        service: serviceName,
+        suggestions: [],
+        existingSloIds: [],
+        _error: true,
+        _errorMessage: (e as Error).message || 'Request failed',
+      };
     }
   }
 
-  async getServiceBadges(): Promise<Record<string, SuggestionBadgeData>> {
+  async getServiceBadges(): Promise<
+    Record<string, SuggestionBadgeData> & { _error?: boolean; _errorMessage?: string }
+  > {
     try {
       const res = await this.cachedGet<{ badges: Record<string, SuggestionBadgeData> }>(
         this.paths.serviceBadges
       );
       return res.badges ?? {};
-    } catch {
-      return {};
+    } catch (e) {
+      return { _error: true, _errorMessage: (e as Error).message || 'Request failed' } as Record<
+        string,
+        SuggestionBadgeData
+      > & { _error: boolean; _errorMessage: string };
     }
   }
 
@@ -546,8 +568,12 @@ export class AlarmsApiClient {
         sloQuery,
         datasourceId,
       });
-    } catch {
-      return emptyResult;
+    } catch (e) {
+      return {
+        ...emptyResult,
+        _error: true,
+        _errorMessage: (e as Error).message || 'Request failed',
+      };
     }
   }
 
@@ -606,15 +632,19 @@ export class AlarmsApiClient {
         sloQuery,
         datasourceId,
       });
-    } catch {
-      return emptyResult;
+    } catch (e) {
+      return {
+        ...emptyResult,
+        _error: true,
+        _errorMessage: (e as Error).message || 'Request failed',
+      };
     }
   }
 
   async getCoverageGaps(): Promise<CoverageGapReport> {
     try {
       return await this.cachedGet<CoverageGapReport>(this.paths.coverageGaps);
-    } catch {
+    } catch (e) {
       return {
         totalServices: 0,
         servicesWithSlos: 0,
@@ -624,6 +654,8 @@ export class AlarmsApiClient {
         alertCoveragePercent: 0,
         gaps: [],
         computedAt: new Date().toISOString(),
+        _error: true,
+        _errorMessage: (e as Error).message || 'Request failed',
       };
     }
   }
@@ -634,8 +666,13 @@ export class AlarmsApiClient {
   }> {
     try {
       return await this.cachedGet(this.paths.groupedIncidents);
-    } catch {
-      return { groups: [], ungrouped: [] };
+    } catch (e) {
+      return {
+        groups: [],
+        ungrouped: [],
+        _error: true,
+        _errorMessage: (e as Error).message || 'Request failed',
+      };
     }
   }
 

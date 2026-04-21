@@ -155,7 +155,8 @@ export function buildLogExplorerUrl(
   query?: string
 ): string {
   const params = new URLSearchParams();
-  const q = query || `serviceName:"${serviceName}"`;
+  const escapedName = serviceName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const q = query || `serviceName:"${escapedName}"`;
   params.set('query', q);
   if (timeRange) {
     params.set('from', timeRange.from);

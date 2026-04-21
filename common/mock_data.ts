@@ -164,3 +164,71 @@ export const MOCK_LABEL_VALUES: Readonly<Record<string, readonly string[]>> = {
   ],
   fault: ['0', '1'],
 } as const;
+
+// ============================================================================
+// Mock Sparkline Data — 7-day daily data points for service trend columns
+// ============================================================================
+
+export interface MockServiceTrend {
+  /** Daily alert firing count over the past 7 days. */
+  alertTrend: Array<{ timestamp: number; value: number }>;
+  /** Daily error budget remaining % (0-100) over the past 7 days. */
+  errorBudgetTrend: Array<{ timestamp: number; value: number }>;
+}
+
+const DAY_MS = 86_400_000;
+
+/** Generates 7 daily timestamps ending at today midnight UTC. */
+const last7Days = (): number[] => {
+  const now = new Date();
+  const todayMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Array.from({ length: 7 }, (_, i) => todayMidnight - (6 - i) * DAY_MS);
+};
+
+const ts = last7Days();
+
+/**
+ * Per-service sparkline mock data keyed by service name.
+ * Patterns reflect realistic SRE scenarios: healthy services have flat trends,
+ * degraded services show rising alerts and declining error budgets.
+ */
+export const MOCK_SERVICE_TRENDS: Readonly<Record<string, MockServiceTrend>> = {
+  'api-gateway': {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [0, 1, 0, 2, 3, 1, 0][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({ timestamp: t, value: [98, 97, 97, 95, 92, 93, 94][i] })),
+  },
+  'payment-service': {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [1, 2, 3, 5, 4, 6, 3][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({ timestamp: t, value: [90, 85, 78, 70, 68, 60, 62][i] })),
+  },
+  'order-service': {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [0, 0, 1, 0, 0, 1, 0][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({ timestamp: t, value: [99, 99, 98, 99, 99, 98, 99][i] })),
+  },
+  'pet-clinic-frontend': {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [0, 0, 0, 0, 1, 0, 0][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({
+      timestamp: t,
+      value: [100, 100, 100, 100, 99, 100, 100][i],
+    })),
+  },
+  'checkout-service': {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [2, 3, 4, 6, 8, 7, 5][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({ timestamp: t, value: [80, 72, 60, 45, 30, 25, 28][i] })),
+  },
+  'notification-service': {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [0, 0, 0, 0, 0, 0, 0][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({
+      timestamp: t,
+      value: [100, 100, 100, 100, 100, 100, 100][i],
+    })),
+  },
+  'user-auth': {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [0, 1, 0, 0, 2, 1, 0][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({ timestamp: t, value: [97, 96, 96, 96, 93, 94, 95][i] })),
+  },
+  postgres: {
+    alertTrend: ts.map((t, i) => ({ timestamp: t, value: [0, 0, 0, 1, 0, 0, 0][i] })),
+    errorBudgetTrend: ts.map((t, i) => ({ timestamp: t, value: [99, 99, 99, 98, 99, 99, 99][i] })),
+  },
+} as const;

@@ -41,8 +41,11 @@ export async function handleGetGroupedIncidents(
     const msg = err instanceof Error ? err.message : String(err);
     if (logger) logger.warn(`handleGetGroupedIncidents failed: ${msg}`);
     return {
-      status: 200,
-      body: { groups: [], ungrouped: [] },
+      status: 503,
+      body: {
+        error: 'Incident grouping temporarily unavailable',
+        message: msg,
+      },
     };
   }
 }

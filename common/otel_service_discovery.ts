@@ -29,6 +29,7 @@ import type { MultiBackendAlertService } from './alert_service';
 
 const TTL_SERVICES_MS = 2 * 60_000; // 2 minutes
 const TTL_SIGNALS_MS = 5 * 60_000; // 5 minutes
+const SIGNAL_FETCH_BATCH_SIZE = 10; // Max concurrent signal fetches
 
 interface CacheEntry<T> {
   data: T;
@@ -42,7 +43,7 @@ interface CacheEntry<T> {
 
 export class OtelServiceDiscoveryService {
   private readonly serviceCache = new Map<string, CacheEntry<unknown>>();
-  private readonly refreshing = new Set<string>();
+  private readonly refreshPromises = new Map<string, Promise<unknown>>();
 
   constructor(
     private readonly provider: OtelServiceDiscoveryProvider,
@@ -65,21 +66,38 @@ export class OtelServiceDiscoveryService {
     // Enrich in parallel: SLO + alert cross-reference + signal detection
     const [sloMap, alertMap] = await Promise.all([this.buildSloMap(), this.buildAlertMap()]);
 
-    const enriched: EnrichedOtelService[] = await Promise.all(
-      services.map(async (svc) => {
-        const sloInfo = sloMap.get(svc.name);
-        const alertCount = alertMap.get(svc.name) ?? 0;
-        const signals = await this.getSignals(svc.name);
+    // Fetch signals in batches to avoid overwhelming OpenSearch with concurrent requests
+    const signalsMap = new Map<string, OtelSignals>();
+    for (let i = 0; i < services.length; i += SIGNAL_FETCH_BATCH_SIZE) {
+      const batch = services.slice(i, i + SIGNAL_FETCH_BATCH_SIZE);
+      const batchSignals = await Promise.all(
+        batch.map(async (svc) => ({
+          name: svc.name,
+          signals: await this.getSignals(svc.name),
+        }))
+      );
+      for (const { name, signals } of batchSignals) {
+        signalsMap.set(name, signals);
+      }
+    }
 
-        return {
-          ...svc,
-          sloCount: sloInfo?.count ?? 0,
-          activeAlertCount: alertCount,
-          worstErrorBudget: sloInfo?.worstBudget,
-          signals,
-        };
-      })
-    );
+    const enriched: EnrichedOtelService[] = services.map((svc) => {
+      const sloInfo = sloMap.get(svc.name);
+      const alertCount = alertMap.get(svc.name) ?? 0;
+      const signals = signalsMap.get(svc.name) ?? {
+        hasTraces: false,
+        hasMetrics: false,
+        hasLogs: false,
+      };
+
+      return {
+        ...svc,
+        sloCount: sloInfo?.count ?? 0,
+        activeAlertCount: alertCount,
+        worstErrorBudget: sloInfo?.worstBudget,
+        signals,
+      };
+    });
 
     return enriched;
   }
@@ -165,10 +183,10 @@ export class OtelServiceDiscoveryService {
 
     if (entry) {
       const isStale = now - entry.fetchedAt > entry.ttlMs;
-      if (isStale && !this.refreshing.has(cacheKey)) {
-        // Background refresh — return stale data immediately
-        this.refreshing.add(cacheKey);
-        fetchFn()
+      if (isStale && !this.refreshPromises.has(cacheKey)) {
+        // Background refresh — store the promise so concurrent requests
+        // don't trigger duplicate refreshes
+        const refreshPromise = fetchFn()
           .then((data) => {
             this.serviceCache.set(cacheKey, { data, fetchedAt: Date.now(), ttlMs });
           })
@@ -180,8 +198,9 @@ export class OtelServiceDiscoveryService {
             );
           })
           .finally(() => {
-            this.refreshing.delete(cacheKey);
+            this.refreshPromises.delete(cacheKey);
           });
+        this.refreshPromises.set(cacheKey, refreshPromise);
       }
       return entry.data;
     }

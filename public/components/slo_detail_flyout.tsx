@@ -67,24 +67,27 @@ export const SloDetailFlyout: React.FC<SloDetailFlyoutProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Fetch full SLO details when slo.id changes
+  // Fetch full SLO details when slo.id changes.
+  // Captures the SLO ID at fetch start to guard against stale responses
+  // overwriting data when the flyout switches to a different SLO.
   useEffect(() => {
     if (!slo) return;
 
     let cancelled = false;
+    const currentSloId = slo.id;
     setLoading(true);
     setError(null);
 
     apiClient
       .getSlo(slo.id)
       .then((data: SloDefinition) => {
-        if (!cancelled) {
+        if (!cancelled && slo?.id === currentSloId) {
           setFullSlo(data);
           setLoading(false);
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
+        if (!cancelled && slo?.id === currentSloId) {
           console.error('Failed to load SLO details:', err);
           setError(err instanceof Error ? err.message : String(err));
           setLoading(false);

@@ -105,8 +105,9 @@ export function computeBlastRadius(graph: TopologyGraph, rootServiceName: string
     reverseAdj.set(edge.target, callers);
   }
 
-  // BFS from root through reverse edges
+  // BFS from root through reverse edges, tracking traversed edges
   const impactedSet = new Set<string>();
+  const traversedEdges = new Set<string>();
   const queue: string[] = [rootServiceName];
   impactedSet.add(rootServiceName);
 
@@ -114,19 +115,13 @@ export function computeBlastRadius(graph: TopologyGraph, rootServiceName: string
     const current = queue.shift()!;
     const callers = reverseAdj.get(current) ?? [];
     for (const caller of callers) {
+      // Record the actual BFS traversal edge (caller depends on current,
+      // so the forward edge is caller -> current)
+      traversedEdges.add(`${caller}->${current}`);
       if (!impactedSet.has(caller)) {
         impactedSet.add(caller);
         queue.push(caller);
       }
-    }
-  }
-
-  // Mark impacted edges: both source and target must be in the impacted set,
-  // and the edge must follow the blast radius path (target is closer to root)
-  const impactedEdges = new Set<string>();
-  for (const edge of graph.edges) {
-    if (impactedSet.has(edge.source) && impactedSet.has(edge.target)) {
-      impactedEdges.add(`${edge.source}->${edge.target}`);
     }
   }
 
@@ -137,7 +132,7 @@ export function computeBlastRadius(graph: TopologyGraph, rootServiceName: string
     })),
     edges: graph.edges.map((e) => ({
       ...e,
-      impacted: impactedEdges.has(`${e.source}->${e.target}`),
+      impacted: traversedEdges.has(`${e.source}->${e.target}`),
     })),
   };
 }
@@ -152,9 +147,9 @@ export function computeFullBlastRadius(graph: TopologyGraph): TopologyGraph {
 
   // Union of all blast radii
   const allImpacted = new Set<string>();
-  const allImpactedEdges = new Set<string>();
+  const allTraversedEdges = new Set<string>();
 
-  // Build reverse adjacency once
+  // Build reverse adjacency once (outside the loop)
   const reverseAdj = new Map<string, string[]>();
   for (const edge of graph.edges) {
     const callers = reverseAdj.get(edge.target) ?? [];
@@ -170,17 +165,13 @@ export function computeFullBlastRadius(graph: TopologyGraph): TopologyGraph {
       allImpacted.add(current);
       const callers = reverseAdj.get(current) ?? [];
       for (const caller of callers) {
+        // Record the actual BFS traversal edge (caller -> current in forward direction)
+        allTraversedEdges.add(`${caller}->${current}`);
         if (!visited.has(caller)) {
           visited.add(caller);
           queue.push(caller);
         }
       }
-    }
-  }
-
-  for (const edge of graph.edges) {
-    if (allImpacted.has(edge.source) && allImpacted.has(edge.target)) {
-      allImpactedEdges.add(`${edge.source}->${edge.target}`);
     }
   }
 
@@ -191,7 +182,7 @@ export function computeFullBlastRadius(graph: TopologyGraph): TopologyGraph {
     })),
     edges: graph.edges.map((e) => ({
       ...e,
-      impacted: allImpactedEdges.has(`${e.source}->${e.target}`),
+      impacted: allTraversedEdges.has(`${e.source}->${e.target}`),
     })),
   };
 }

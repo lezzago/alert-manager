@@ -84,16 +84,29 @@ export const AlertDetailFlyout: React.FC<AlertDetailFlyoutProps> = ({
 }) => {
   const [detailData, setDetailData] = useState<typeof alert | null>(null);
 
-  // Fetch full detail (with raw data) from the API when flyout opens
+  // Fetch full detail (with raw data) from the API when flyout opens.
+  // Captures the alert ID at fetch start to guard against stale responses
+  // overwriting data when the flyout switches to a different alert.
   useEffect(() => {
     let cancelled = false;
+    const currentAlertId = alert.id;
+    const currentDsId = alert.datasourceId;
     apiClient
       .getAlertDetail(alert.datasourceId, alert.id)
       .then((data: UnifiedAlert) => {
-        if (!cancelled && data) setDetailData(data);
+        if (
+          !cancelled &&
+          alert.id === currentAlertId &&
+          alert.datasourceId === currentDsId &&
+          data
+        ) {
+          setDetailData(data);
+        }
       })
       .catch((err: unknown) => {
-        console.error('Failed to load alert details:', err);
+        if (!cancelled) {
+          console.error('Failed to load alert details:', err);
+        }
       });
     return () => {
       cancelled = true;

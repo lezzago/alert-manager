@@ -45,6 +45,8 @@ module.exports = {
         '\\.(css|scss)$': '<rootDir>/public/__mocks__/style_mock.ts',
         // Mock echarts (uses canvas, not available in jsdom)
         '^echarts$': '<rootDir>/public/__mocks__/style_mock.ts',
+        // Mock @osd/apm-topology (uses ReactFlow/canvas, not available in jsdom)
+        '^@osd/apm-topology$': '<rootDir>/public/__mocks__/apm_topology_mock.tsx',
       },
     },
   ],
@@ -84,7 +86,7 @@ module.exports = {
     '!public/components/metric_browser.tsx',
     '!public/components/promql_editor.tsx',
     '!public/components/echarts_render.tsx',
-    '!public/components/topology_graph.tsx',
+    '!public/components/topology_celestial_graph.tsx',
     '!public/components/table_pagination.tsx',
     '!public/components/sli_section.tsx',
     '!public/components/sli_combo_boxes.tsx',
@@ -96,6 +98,9 @@ module.exports = {
     '!public/components/error_boundary.tsx',
     '!public/components/facet_filter_panel.tsx',
     '!public/components/monitor_form_components.tsx',
+    '!public/components/services_tab.tsx',
+    '!public/components/services_empty_state.tsx',
+    '!public/components/metric_sparkline.tsx',
     '!public/hooks/use_prometheus_metadata.ts',
     // Exclude mock data — no value in unit testing these
     '!common/mock_data.ts',

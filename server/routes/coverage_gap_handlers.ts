@@ -25,16 +25,10 @@ export async function handleGetCoverageGaps(
     const msg = err instanceof Error ? err.message : String(err);
     if (logger) logger.warn(`handleGetCoverageGaps failed: ${msg}`);
     return {
-      status: 200,
+      status: 503,
       body: {
-        totalServices: 0,
-        servicesWithSlos: 0,
-        servicesWithAlerts: 0,
-        servicesWithoutAnyCoverage: 0,
-        sloCoveragePercent: 0,
-        alertCoveragePercent: 0,
-        gaps: [],
-        computedAt: new Date().toISOString(),
+        error: 'Coverage gap analysis temporarily unavailable',
+        message: msg,
       },
     };
   }

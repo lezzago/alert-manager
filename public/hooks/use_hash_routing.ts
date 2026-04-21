@@ -18,7 +18,7 @@
  *   #/routing                      → Routing tab
  *   #/suppression                  → Suppression tab
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { parseHash, buildHash, HashRoute, AlertManagerTab } from '../../common/deep_links';
 
 export interface HashRoutingState {
@@ -80,31 +80,25 @@ function stateToRoute(state: HashRoutingState): HashRoute {
  * - When the hash changes externally (back/forward button), updates state.
  */
 export function useHashRouting(): [HashRoutingState, HashRoutingActions] {
-  // Suppress hash -> state sync when we're the ones updating the hash
-  const suppressHashSync = useRef(false);
-
   const [state, setState] = useState<HashRoutingState>(() =>
     routeToState(parseHash(window.location.hash))
   );
 
-  // Update the URL hash when state changes
+  // Update the URL hash when state changes.
+  // Uses pushState for navigational changes (preserves back-button history)
+  // without firing the hashchange listener, eliminating the race condition
+  // that existed with direct `location.hash` assignment.
   const updateHash = useCallback((newState: HashRoutingState) => {
     const hash = buildHash(stateToRoute(newState));
-    suppressHashSync.current = true;
-    // Set hash directly — triggers hashchange but we suppress it.
-    // Using location.hash instead of replaceState for broader compatibility.
-    window.location.hash = hash.substring(1); // strip leading '#'
+    window.history.pushState(null, '', hash);
     setState(newState);
-    // Reset suppression on next tick
-    setTimeout(() => {
-      suppressHashSync.current = false;
-    }, 0);
   }, []);
 
-  // Listen for external hash changes (back/forward button)
+  // Listen for external hash changes (back/forward button, user typing in URL bar).
+  // Internal state updates use replaceState which does NOT fire hashchange,
+  // so this listener only triggers on genuine external navigation.
   useEffect(() => {
     const handleHashChange = () => {
-      if (suppressHashSync.current) return;
       setState(routeToState(parseHash(window.location.hash)));
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -114,32 +108,24 @@ export function useHashRouting(): [HashRoutingState, HashRoutingActions] {
   // Set initial hash if empty
   useEffect(() => {
     if (!window.location.hash || window.location.hash === '#' || window.location.hash === '#/') {
-      suppressHashSync.current = true;
-      window.location.hash = buildHash(stateToRoute(state)).substring(1);
-      setTimeout(() => {
-        suppressHashSync.current = false;
-      }, 0);
+      window.history.replaceState(null, '', buildHash(stateToRoute(state)));
     }
     // Only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const actions: HashRoutingActions = {
-    setTab: useCallback((tab: AlertManagerTab) => {
-      const newState: HashRoutingState = {
-        tab,
-        alertDetail: null,
-        sloId: null,
-        serviceName: null,
-      };
-      const hash = buildHash(stateToRoute(newState));
-      suppressHashSync.current = true;
-      window.location.hash = hash.substring(1);
-      setState(newState);
-      setTimeout(() => {
-        suppressHashSync.current = false;
-      }, 0);
-    }, []),
+    setTab: useCallback(
+      (tab: AlertManagerTab) => {
+        updateHash({
+          tab,
+          alertDetail: null,
+          sloId: null,
+          serviceName: null,
+        });
+      },
+      [updateHash]
+    ),
 
     openAlert: useCallback(
       (datasourceId: string, alertId: string) => {

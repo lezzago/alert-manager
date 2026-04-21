@@ -219,3 +219,110 @@ describe('Alert Cross-Signal Correlations', () => {
     });
   });
 });
+
+// ============================================================================
+// Cross-Signal Correlation UI
+// ============================================================================
+
+describe('Cross-Signal Correlation UI', () => {
+  // Helper: open an alert that has a service label for an OTEL-registered service.
+  // "production_rule_1_api-gateway" has service: api-gateway which is in the mock
+  // OTEL topology, giving rich correlation data (traces, logs, metrics, failure modes).
+  // We click the alert NAME button (EuiButtonEmpty) to open the detail flyout.
+  const openServiceAlert = () => {
+    cy.ensureLoaded();
+    cy.contains('Alerts').click();
+    cy.get('table tbody tr', { timeout: 30000 }).should('have.length.greaterThan', 0);
+    // Click the alert name button to open the detail flyout
+    cy.contains('button', 'production_rule_1_api-gateway', { timeout: 10000 }).first().click();
+  };
+
+  it('displays correlation panel with sub-tabs in alert flyout', () => {
+    openServiceAlert();
+
+    // The correlation panel should exist inside the flyout
+    cy.get('[data-test-subj="alertCorrelationPanel"]', { timeout: 15000 }).should('exist');
+    // Sub-tabs: Traces, Logs, Metrics
+    cy.get('[data-test-subj="correlationTab-traces"]').should('exist');
+    cy.get('[data-test-subj="correlationTab-logs"]').should('exist');
+    cy.get('[data-test-subj="correlationTab-metrics"]').should('exist');
+  });
+
+  it('shows traces table in default Traces sub-tab', () => {
+    openServiceAlert();
+
+    cy.get('[data-test-subj="alertCorrelationPanel"]', { timeout: 15000 }).should('exist');
+    // Traces tab is selected by default
+    cy.get('[data-test-subj="correlationTracesTable"]', { timeout: 10000 }).should('exist');
+    cy.get('[data-test-subj="correlationTracesTable"] tbody tr').should(
+      'have.length.greaterThan',
+      0
+    );
+  });
+
+  it('switches to Logs sub-tab and shows logs table', () => {
+    openServiceAlert();
+
+    cy.get('[data-test-subj="alertCorrelationPanel"]', { timeout: 15000 }).should('exist');
+    // Click the Logs sub-tab
+    cy.get('[data-test-subj="correlationTab-logs"]').click();
+    cy.get('[data-test-subj="correlationLogsTable"]', { timeout: 10000 }).should('exist');
+    cy.get('[data-test-subj="correlationLogsTable"] tbody tr').should('have.length.greaterThan', 0);
+  });
+
+  it('switches to Metrics sub-tab and shows metric panels', () => {
+    openServiceAlert();
+
+    cy.get('[data-test-subj="alertCorrelationPanel"]', { timeout: 15000 }).should('exist');
+    // Click the Metrics sub-tab
+    cy.get('[data-test-subj="correlationTab-metrics"]').click();
+    cy.get('[data-test-subj="correlationMetricsList"]', { timeout: 10000 }).should('exist');
+  });
+
+  it('shows failure modes summary', () => {
+    openServiceAlert();
+
+    cy.get('[data-test-subj="alertCorrelationPanel"]', { timeout: 15000 }).should('exist');
+    // Failure modes summary panel should show dominant failure patterns
+    cy.get('[data-test-subj="failureModesSummary"]', { timeout: 10000 }).should('exist');
+    cy.get('[data-test-subj="failureModesSummary"]').within(() => {
+      cy.contains('Dominant Failure Modes').should('exist');
+    });
+  });
+
+  it('shows "View all logs" link in Logs sub-tab', () => {
+    openServiceAlert();
+
+    cy.get('[data-test-subj="alertCorrelationPanel"]', { timeout: 15000 }).should('exist');
+    cy.get('[data-test-subj="correlationTab-logs"]').click();
+    // "View all logs" deep link should exist
+    cy.get('[data-test-subj="viewAllLogsLink"]', { timeout: 10000 }).should('exist');
+  });
+
+  it('hides correlation panel for alerts without service label', () => {
+    cy.ensureLoaded();
+    cy.contains('Alerts').click();
+    cy.get('table tbody tr', { timeout: 30000 }).should('have.length.greaterThan', 0);
+    // OpenSearch alerts do NOT have a service label. Click one by its name button.
+    // "Cluster Health Status" is an OS alert always on page 1.
+    cy.contains('button', 'Cluster Health Status', { timeout: 10000 }).first().click();
+    // Correlation panel should NOT exist for alerts without service labels
+    cy.get('[data-test-subj="alertCorrelationPanel"]').should('not.exist');
+  });
+
+  it('sub-tab counts reflect correlated signal counts', () => {
+    openServiceAlert();
+
+    cy.get('[data-test-subj="alertCorrelationPanel"]', { timeout: 15000 }).should('exist');
+    // Each tab label should include a count in parentheses, e.g., "Traces (5)"
+    cy.get('[data-test-subj="correlationTab-traces"]')
+      .invoke('text')
+      .should('match', /Traces \(\d+\)/);
+    cy.get('[data-test-subj="correlationTab-logs"]')
+      .invoke('text')
+      .should('match', /Logs \(\d+\)/);
+    cy.get('[data-test-subj="correlationTab-metrics"]')
+      .invoke('text')
+      .should('match', /Metrics \(\d+\)/);
+  });
+});

@@ -10,7 +10,7 @@
  * Intended for the Services tab.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   EuiFlexGroup,
   EuiFlexItem,
@@ -18,9 +18,11 @@ import {
   EuiText,
   EuiSpacer,
   EuiBadge,
+  EuiButton,
   EuiStat,
   EuiLoadingSpinner,
   EuiBasicTable,
+  EuiCallOut,
 } from '@elastic/eui';
 import type { AlarmsApiClient } from '../services/alarms_client';
 import type {
@@ -54,13 +56,35 @@ export const CoverageGapPanel: React.FC<CoverageGapPanelProps> = ({
 }) => {
   const [report, setReport] = useState<CoverageGapReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCoverageGaps = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const r = await apiClient.getCoverageGaps();
+    if ((r as any)._error) {
+      setReport(null);
+      setError((r as any)._errorMessage || 'Failed to load coverage analysis');
+    } else {
+      setReport(r);
+    }
+    setLoading(false);
+  }, [apiClient]);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     apiClient
       .getCoverageGaps()
       .then((r) => {
-        if (!cancelled) setReport(r);
+        if (cancelled) return;
+        if ((r as any)._error) {
+          setReport(null);
+          setError((r as any)._errorMessage || 'Failed to load coverage analysis');
+        } else {
+          setReport(r);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -68,7 +92,7 @@ export const CoverageGapPanel: React.FC<CoverageGapPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [apiClient]);
 
   if (loading) {
     return (
@@ -80,6 +104,17 @@ export const CoverageGapPanel: React.FC<CoverageGapPanelProps> = ({
           <EuiText size="s">Loading coverage analysis...</EuiText>
         </EuiFlexItem>
       </EuiFlexGroup>
+    );
+  }
+
+  if (error) {
+    return (
+      <EuiCallOut title="Coverage analysis unavailable" color="danger" iconType="alert" size="s">
+        <p>{error}</p>
+        <EuiButton size="s" onClick={fetchCoverageGaps}>
+          Retry
+        </EuiButton>
+      </EuiCallOut>
     );
   }
 

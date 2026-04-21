@@ -25,6 +25,8 @@ import {
   EuiIcon,
   EuiToolTip,
   EuiLink,
+  EuiCallOut,
+  EuiButton,
 } from '@elastic/eui';
 import type {
   AlertCorrelationResult,
@@ -53,26 +55,48 @@ export const AlertCorrelationPanel: React.FC<AlertCorrelationPanelProps> = ({
   const [activeTab, setActiveTab] = useState<SubTabId>('traces');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AlertCorrelationResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchCorrelations = useCallback(async () => {
     setLoading(true);
-    try {
-      const result = await apiClient.getAlertCorrelations(alert);
-      setData(result);
-    } catch {
+    setError(null);
+    const result = await apiClient.getAlertCorrelations(alert);
+    if ((result as any)._error) {
       setData(null);
-    } finally {
-      setLoading(false);
+      setError((result as any)._errorMessage || 'Failed to load correlations');
+    } else {
+      setData(result);
     }
+    setLoading(false);
   }, [alert.id, alert.labels?.service, apiClient]);
 
   useEffect(() => {
-    if (alert.labels?.service) {
-      fetchCorrelations();
-    } else {
+    if (!alert.labels?.service) {
       setLoading(false);
+      return;
     }
-  }, [alert.labels?.service, fetchCorrelations]);
+    let cancelled = false;
+    const currentAlertId = alert.id;
+    setLoading(true);
+    setError(null);
+    apiClient
+      .getAlertCorrelations(alert)
+      .then((result) => {
+        if (cancelled || alert.id !== currentAlertId) return;
+        if ((result as any)._error) {
+          setData(null);
+          setError((result as any)._errorMessage || 'Failed to load correlations');
+        } else {
+          setData(result);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [alert.id, alert.labels?.service, apiClient]);
 
   if (!alert.labels?.service) {
     return (
@@ -96,6 +120,17 @@ export const AlertCorrelationPanel: React.FC<AlertCorrelationPanelProps> = ({
           </EuiText>
         </EuiFlexItem>
       </EuiFlexGroup>
+    );
+  }
+
+  if (error) {
+    return (
+      <EuiCallOut title="Correlations unavailable" color="danger" iconType="alert" size="s">
+        <p>{error}</p>
+        <EuiButton size="s" onClick={fetchCorrelations}>
+          Retry
+        </EuiButton>
+      </EuiCallOut>
     );
   }
 

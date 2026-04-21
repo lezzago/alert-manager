@@ -47,6 +47,9 @@ const MAX_TRACES = 50;
 /** Max logs per correlation request. */
 const MAX_LOGS = 100;
 
+/** Maximum cache entries before triggering eviction. */
+const MAX_CACHE_SIZE = 100;
+
 interface CacheEntry {
   result: AlertCorrelationResult;
   fetchedAt: number;
@@ -90,6 +93,16 @@ export class AlertCorrelationService {
     const serviceName = alert.labels?.service;
     if (!serviceName) {
       return this.emptyResult(alert.id, '', this.defaultWindow());
+    }
+
+    // Evict stale entries if cache exceeds max size
+    if (this.cache.size > MAX_CACHE_SIZE) {
+      const now = Date.now();
+      for (const [key, entry] of this.cache) {
+        if (now - entry.fetchedAt > CACHE_TTL_MS * 2) {
+          this.cache.delete(key);
+        }
+      }
     }
 
     // Check cache

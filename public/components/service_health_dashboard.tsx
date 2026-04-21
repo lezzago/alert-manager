@@ -8,11 +8,11 @@
  *
  * Layout:
  *  - Left panel: compact service list with health indicators
- *  - Center panel: ECharts topology graph with SLO/alert overlays
+ *  - Center panel: CelestialMap topology graph with SLO/alert overlays
  *  - Bottom panel: active incidents with dependency impact chains
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { Component, useState, useMemo, useCallback } from 'react';
 import {
   EuiFlexGroup,
   EuiFlexItem,
@@ -23,6 +23,7 @@ import {
   EuiHealth,
   EuiTitle,
   EuiEmptyPrompt,
+  EuiButton,
   EuiButtonEmpty,
   EuiFieldSearch,
 } from '@elastic/eui';
@@ -38,7 +39,43 @@ import {
 } from '../../common/topology_service';
 import { groupIncidents } from '../../common/incident_grouping_service';
 import type { IncidentGroup } from '../../common/root_cause_types';
-import { TopologyGraphView } from './topology_graph';
+import { TopologyCelestialGraph } from './topology_celestial_graph';
+
+// Error boundary to catch topology graph rendering crashes without killing the entire dashboard
+class GraphErrorBoundary extends Component<
+  { children: React.ReactNode; fallback?: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        this.props.fallback || (
+          <EuiEmptyPrompt
+            iconType="alert"
+            title={<h3>Topology graph error</h3>}
+            body={<p>The graph encountered an error.</p>}
+            actions={
+              <EuiButton
+                size="s"
+                onClick={() => this.setState({ hasError: false, error: undefined })}
+              >
+                Try again
+              </EuiButton>
+            }
+          />
+        )
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface ServiceHealthDashboardProps {
   services: EnrichedOtelService[];
@@ -234,12 +271,14 @@ export const ServiceHealthDashboard: React.FC<ServiceHealthDashboardProps> = ({
                 </EuiFlexGroup>
               </EuiFlexItem>
             </EuiFlexGroup>
-            <TopologyGraphView
-              graph={graph}
-              selectedNodeId={selectedNodeId}
-              onNodeClick={handleNodeClick}
-              height={460}
-            />
+            <GraphErrorBoundary>
+              <TopologyCelestialGraph
+                graph={graph}
+                selectedNodeId={selectedNodeId}
+                onNodeClick={handleNodeClick}
+                height={460}
+              />
+            </GraphErrorBoundary>
           </EuiPanel>
         </EuiFlexItem>
       </EuiFlexGroup>

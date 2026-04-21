@@ -35,21 +35,37 @@ export function findRootService(incidentServiceNames: string[], graph: TopologyG
   const candidateSet = new Set(incidentServiceNames);
 
   // Build forward adjacency: source → targets (source depends on target)
-  const forwardAdj = new Map<string, string[]>();
-  for (const edge of graph.edges) {
-    const deps = forwardAdj.get(edge.source) ?? [];
-    deps.push(edge.target);
-    forwardAdj.set(edge.source, deps);
+  const forwardAdj = buildForwardAdj(graph);
+
+  // Build reachability sets once per candidate via BFS — O(N * (N+E))
+  const reachableFrom = new Map<string, Set<string>>();
+  for (const candidate of incidentServiceNames) {
+    const reachable = new Set<string>();
+    const queue = [candidate];
+    const visited = new Set<string>([candidate]);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const deps = forwardAdj.get(current) ?? [];
+      for (const dep of deps) {
+        if (!visited.has(dep)) {
+          visited.add(dep);
+          reachable.add(dep);
+          queue.push(dep);
+        }
+      }
+    }
+    reachableFrom.set(candidate, reachable);
   }
 
   // For each candidate, count how many other candidates transitively depend on it
+  // using precomputed reachability — O(1) per pair
   const dependentCount = new Map<string, number>();
 
   for (const candidate of incidentServiceNames) {
     let count = 0;
     for (const other of incidentServiceNames) {
       if (other === candidate) continue;
-      if (transitivelyDependsOn(other, candidate, forwardAdj)) {
+      if (reachableFrom.get(other)!.has(candidate)) {
         count++;
       }
     }
@@ -69,33 +85,6 @@ export function findRootService(incidentServiceNames: string[], graph: TopologyG
   }
 
   return root;
-}
-
-/**
- * Check if `source` transitively depends on `target` via forward edges.
- */
-function transitivelyDependsOn(
-  source: string,
-  target: string,
-  forwardAdj: Map<string, string[]>
-): boolean {
-  const visited = new Set<string>();
-  const queue = [source];
-  visited.add(source);
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const deps = forwardAdj.get(current) ?? [];
-    for (const dep of deps) {
-      if (dep === target) return true;
-      if (!visited.has(dep)) {
-        visited.add(dep);
-        queue.push(dep);
-      }
-    }
-  }
-
-  return false;
 }
 
 // ============================================================================
@@ -161,17 +150,37 @@ export function groupIncidents(incidents: ActiveIncident[], graph: TopologyGraph
     }
   }
 
+  // Build transitive reachability sets once per incident service (O(N * (N+E)))
+  // instead of checking every pair with a fresh BFS (O(N^2 * (N+E)))
+  const forwardAdj = buildForwardAdj(graph);
+  const reachableFrom = new Map<string, Set<string>>();
+  for (const name of incidentNames) {
+    const reachable = new Set<string>();
+    const queue = [name];
+    const visited = new Set<string>([name]);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const deps = forwardAdj.get(current) ?? [];
+      for (const dep of deps) {
+        if (!visited.has(dep)) {
+          visited.add(dep);
+          reachable.add(dep);
+          queue.push(dep);
+        }
+      }
+    }
+    reachableFrom.set(name, reachable);
+  }
+
   // Also union services that are transitively connected through non-incident nodes
-  // by checking if two incident services share a dependency path
+  // Using precomputed reachability for O(1) lookups per pair
   for (const nameA of incidentNames) {
     for (const nameB of incidentNames) {
       if (nameA >= nameB) continue;
       if (find(nameA) === find(nameB)) continue;
-      // Check if A depends on B or B depends on A (transitively)
-      if (
-        transitivelyDependsOn(nameA, nameB, buildForwardAdj(graph)) ||
-        transitivelyDependsOn(nameB, nameA, buildForwardAdj(graph))
-      ) {
+      const aReaches = reachableFrom.get(nameA)!;
+      const bReaches = reachableFrom.get(nameB)!;
+      if (aReaches.has(nameB) || bReaches.has(nameA)) {
         union(nameA, nameB);
       }
     }
